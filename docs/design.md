@@ -538,3 +538,43 @@ it comes from.
 | drizzle `node-sqlite` migrator options                                                                        | slice 1             |
 | mupdf embedded image extraction and text positions on real lectures                                           | slice 3             |
 | Image Occlusion import in Anki                                                                                | slice 8, first task |
+
+Status after the first build (2026-10-25):
+
+- **Checked:** MCP over a React Router resource route under `vp dev` and the production server;
+  the drizzle `node-sqlite` migrator; mupdf text positions and original JPEG bytes on the fixture
+  lecture.
+- **Not checkable here:** everything that needs a real CLI run. On the build machine Codex is not
+  installed and Claude Code is 2.1.258 (below the 2.1.259 minimum) and signed out. Worker
+  behaviour is covered by a fake CLI that speaks both JSON stream formats and calls the real MCP
+  endpoint; real-CLI items above remain open.
+- **Open:** the Image Occlusion import (`packages/apkg/scripts/io-check.ts`).
+
+## 20. Implementation notes
+
+Where the build differs from the sections above:
+
+- **History (§5, §6):** one generic `row_versions` table stores every version of every tracked
+  row (with table name, row id, version, changeset, operation and the full row as JSON), instead
+  of a `_history` twin per table. Revert, restore and snapshot reads work as described.
+- **Transactions:** drizzle's node:sqlite driver only allows synchronous transaction callbacks,
+  so changesets run as `BEGIN IMMEDIATE`/`COMMIT` on the single connection, serialised by a
+  process-wide write lock (`packages/core/src/lock.ts`).
+- **Stage instructions (§8.3):** the worker rules and each stage's instructions are written into
+  the run folder as `AGENTS.md`, `CLAUDE.md` and `stage.md`, besides the skill folders. Codex
+  reads `AGENTS.md`; Claude also gets `--append-system-prompt-file`. `developer_instructions` is
+  not used.
+- **Review kinds (§7):** `untrusted_source` was added. External evidence from a domain not on the
+  trusted list (when the list is in use) raises one; rejecting it excludes the knowledge item.
+  Approving a `visual_proposal` embeds the image in the proposed concepts directly.
+- **Image Occlusion masks (§13.3):** `suggest_occlusion_masks` uses PDF text positions. When the
+  labels sit beside the figure, it renders a crop of the page covering the figure and its labels
+  (`renderPdfRegion` in ingest) and returns masks on that crop.
+- **Export (§13.4):** card rows come from each topic's card-set snapshot; the Source citation is
+  computed from current evidence.
+- **Card types:** the Image Occlusion note type uses Anki's stock field name `Occlusion`
+  (singular).
+- **Tests (§17):** the fake worker is `packages/mcp/test/fake-cli.mjs`, a stand-in for both CLIs.
+  `packages/mcp/test/pipeline.test.ts` runs fixture → synthesis → plan → cards → `.apkg`.
+- **Repo root:** the production server sets `ANKI_CARDS_ROOT`, because bundled code can't derive
+  paths (migrations, skills) from module URLs.
