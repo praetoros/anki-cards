@@ -21,6 +21,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export const LIBRARY_TABS = [
   { to: "", label: "Overview", end: true },
+  { to: "sources", label: "Sources" },
   { to: "settings", label: "Settings" },
 ];
 

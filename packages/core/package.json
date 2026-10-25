@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@anki-cards/ingest": "catalog:",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {

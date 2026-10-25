@@ -22,3 +22,4 @@ export * from "./worker/run-folder.ts";
 export * from "./worker/runner.ts";
 export * from "./worker/stage-tools.ts";
 export * from "./workflow.ts";
+export * from "./sources.ts";
