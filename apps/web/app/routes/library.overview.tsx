@@ -5,7 +5,9 @@ import {
   libraryOutline,
   listReviewItems,
   listSources,
+  pendingEnrichment,
   sendFeedback,
+  startEnrichment,
   startSynthesis,
   unsynthesisedSources,
 } from "@anki-cards/core";
@@ -43,6 +45,7 @@ export async function loader({ params }: Route.LoaderArgs) {
       .length,
     awaitingAi: review.filter((r) => r.status === "awaiting_ai").length,
     synthesisGate: await gateStatus(db, libraryId, "synthesis"),
+    enrichment: (await pendingEnrichment(db, libraryId)).length,
   };
 }
 
@@ -58,6 +61,10 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (intent === "send-feedback") {
       const jobs = await sendFeedback(db, params.libraryId);
       return { ok: true, message: `${jobs.length} feedback job(s) queued.` };
+    }
+    if (intent === "enrich") {
+      await startEnrichment(db, params.libraryId);
+      return { ok: true, message: "Enrichment job queued." };
     }
     if (intent === "approve-synthesis") {
       await approveGate(db, params.libraryId, "synthesis");
@@ -148,6 +155,20 @@ export default function Overview({ loaderData, actionData }: Route.ComponentProp
                 Send {d.awaitingAi} item(s) to AI
               </Button>
             </Form>
+            {d.enrichment > 0 && (
+              <Form method="post">
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="secondary"
+                  name="intent"
+                  value="enrich"
+                  disabled={busy}
+                >
+                  Research {d.enrichment} approved request(s)
+                </Button>
+              </Form>
+            )}
           </CardContent>
         </Card>
         <Card size="sm">

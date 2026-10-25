@@ -32,7 +32,7 @@ export const TOOL_GROUPS = {
     "merge_concepts",
     "delete_item",
   ],
-  enrichment: ["add_external_evidence", "propose_external_media"],
+  enrichment: ["add_external_evidence", "propose_external_media", "list_trusted_sources"],
   planning: ["propose_card_plan", "update_card_plan_row"],
   generation: ["upsert_card", "propose_occlusion_masks", "retire_card", "get_card"],
 } as const;

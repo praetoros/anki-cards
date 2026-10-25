@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 
 import { recordBackup, writeBackup } from "./backup.ts";
 import { createDb, migrationsFolder, runMigrations, type TDatabase } from "./db/client.ts";
+import { ensureDefaultTrustedSources } from "./enrichment.ts";
 import { resolvePaths, type AppPaths } from "./paths.ts";
 import { checkAllProviders } from "./worker/providers.ts";
 import { startRunner } from "./worker/runner.ts";
@@ -48,6 +49,7 @@ export function getRuntime(): Promise<Runtime> {
   store[key] ??= (async () => {
     const paths = resolvePaths();
     const db = await openAppDatabase(paths);
+    await ensureDefaultTrustedSources(db);
     const port = Number(process.env.ANKI_CARDS_PORT ?? 4317);
     const runtime: Runtime = {
       db,

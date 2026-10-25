@@ -31,3 +31,4 @@ export * from "./workflow-actions.ts";
 export * from "./history-view.ts";
 export * from "./library-export.ts";
 export * from "./session-actions.ts";
+export * from "./enrichment.ts";

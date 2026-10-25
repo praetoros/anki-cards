@@ -95,6 +95,8 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
   const [params] = useSearchParams();
   const busy = useNavigation().state !== "idle";
   const awaiting = items.filter((i) => i.status === "awaiting_ai").length;
+  const media: unknown = selected?.item.payload["mediaId"];
+  const proposalMedia = typeof media === "string" ? media : null;
   const link = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params);
     for (const [k, v] of Object.entries(patch)) next.set(k, v);
@@ -153,6 +155,13 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
           </div>
           {selected.item.description && (
             <p className="text-sm whitespace-pre-wrap">{selected.item.description}</p>
+          )}
+          {proposalMedia && (
+            <img
+              src={`/media/${proposalMedia}`}
+              alt="Proposed"
+              className="max-h-64 self-start rounded border object-contain"
+            />
           )}
           <Payload payload={selected.item.payload} />
           {selected.targetViews.length > 0 && (

@@ -28,6 +28,7 @@ import type {
   RelationshipKind,
   VerificationOutcome,
 } from "./domain/enums.ts";
+import { assertEnrichmentAllowed, checkExternalSource } from "./enrichment.ts";
 import { DomainError } from "./errors.ts";
 import { change, type ChangeContext, type Changes } from "./history.ts";
 import { resolveIds, resolveRow } from "./resolve.ts";
@@ -229,6 +230,8 @@ async function addExternal(
     "External knowledge",
   );
   const approval = approvals.find((a) => a.scope.conceptIds.includes(conceptId));
+  await assertEnrichmentAllowed(c.tx, w.ctx.libraryId);
+  const trusted = await checkExternalSource(c, w.ctx.libraryId, kiId, ev.url);
   return c.insert("evidence", {
     knowledgeItemId: kiId,
     kind: "external",
@@ -240,7 +243,7 @@ async function addExternal(
       date: ev.date,
       passage: ev.passage,
       figure: ev.figure,
-      trusted: ev.trusted,
+      trusted,
     },
     note: "",
     verification: ev.verification ?? "directly_supported",

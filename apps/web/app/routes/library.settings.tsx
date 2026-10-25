@@ -1,21 +1,38 @@
-import { exportLibraryArchive } from "@anki-cards/core";
+import {
+  exportLibraryArchive,
+  addTrustedSource,
+  listTrustedSources,
+  removeTrustedSource,
+} from "@anki-cards/core";
 import { Button } from "@anki-cards/ui/components/button";
 import { useFetcher } from "react-router";
 
 import { SettingsForm } from "~/components/settings-form";
-import { handle, rt } from "~/lib/runtime.server";
+import { TrustedSources } from "~/components/trusted-sources";
+import { formString, handle, rt } from "~/lib/runtime.server";
 import { saveSettingFromForm, settingViews } from "~/lib/settings.server";
 import type { Route } from "./+types/library.settings";
 
 export async function loader({ params }: Route.LoaderArgs) {
   const { db } = await rt();
-  return { settings: await settingViews(db, params.libraryId) };
+  return {
+    settings: await settingViews(db, params.libraryId),
+    trusted: await listTrustedSources(db, params.libraryId),
+  };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const form = await request.formData();
   return handle(async () => {
     const { db, paths } = await rt();
+    if (form.get("intent") === "add-trusted") {
+      await addTrustedSource(db, params.libraryId, formString(form, "domain"));
+      return { ok: true };
+    }
+    if (form.get("intent") === "remove-trusted") {
+      await removeTrustedSource(db, formString(form, "trustedId"));
+      return { ok: true };
+    }
     if (form.get("intent") === "export-library") {
       const path = await exportLibraryArchive(db, paths, params.libraryId);
       return { ok: true, message: `Exported to ${path}` };
@@ -47,6 +64,7 @@ export default function LibrarySettings({ loaderData }: Route.ComponentProps) {
         Settings saved here override the global value for this library only.
       </p>
       <ExportLibrary />
+      <TrustedSources sources={loaderData.trusted} scope="library" />
       <SettingsForm settings={loaderData.settings} scope="library" />
     </main>
   );

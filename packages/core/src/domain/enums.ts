@@ -94,6 +94,7 @@ export const REVIEW_KINDS = [
   "stage_gate",
   "job_failure",
   "repeated_tool_error",
+  "untrusted_source",
 ] as const;
 export type ReviewKind = (typeof REVIEW_KINDS)[number];
 

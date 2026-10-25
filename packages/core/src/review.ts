@@ -44,6 +44,7 @@ export const KIND_CATEGORY: Record<ReviewKind, ReviewCategory> = {
   stage_gate: "requires_decision",
   job_failure: "recommended_review",
   repeated_tool_error: "requires_decision",
+  untrusted_source: "requires_decision",
 };
 
 const DECISION_KINDS: ReviewKind[] = [
@@ -52,6 +53,7 @@ const DECISION_KINDS: ReviewKind[] = [
   "enrichment_request",
   "visual_proposal",
   "card_plan",
+  "untrusted_source",
 ];
 
 export async function raiseReviewItem(
@@ -158,6 +160,35 @@ function approvalFor(
 
 const EXCLUDABLE: TrackedTableName[] = ["topics", "subtopics", "concepts", "knowledge_items"];
 
+async function excludeTargets(c: Changes, reviewItemId: string) {
+  const targets = await c.tx
+    .select()
+    .from(tReviewItemTarget)
+    .where(eq(tReviewItemTarget.reviewItemId, reviewItemId));
+  for (const t of targets) {
+    const table = t.targetTable as TrackedTableName;
+    if (EXCLUDABLE.includes(table)) await c.update(table, t.targetId, { excluded: true } as never);
+  }
+}
+
+/** Approving a visual proposal embeds the downloaded image in the proposed concepts. */
+async function embedProposedVisual(c: Changes, item: TReviewItemS) {
+  const mediaId = item.payload["mediaId"];
+  const conceptIds = item.payload["conceptIds"];
+  if (typeof mediaId !== "string" || !Array.isArray(conceptIds)) return;
+  for (const conceptId of conceptIds as string[]) {
+    await c.insert("media_links", {
+      mediaId,
+      conceptId,
+      knowledgeItemId: null,
+      role: "contextual",
+      component: "",
+      rationale: typeof item.payload["purpose"] === "string" ? item.payload["purpose"] : "",
+    });
+  }
+  await c.update("media_assets", mediaId, { relevance: "supporting" });
+}
+
 /**
  * Applies a user's decision. Approve, reject, defer and exclude are handled here;
  * correct and comment hand the item to the AI (status `awaiting_ai`).
@@ -200,29 +231,26 @@ export async function actOnReviewItem(
             status: "active",
           });
         }
+        if (item.kind === "visual_proposal") await embedProposedVisual(c, item);
         return c.update(
           "review_items",
           item.id,
           {
-            status: approvalFor(item).length > 0 ? "awaiting_ai" : "resolved",
+            status:
+              approvalFor(item).length > 0 && item.kind !== "visual_proposal"
+                ? "awaiting_ai"
+                : "resolved",
             resolution: "approved",
           },
           input.expectedVersion,
         );
       case "reject":
+        if (item.kind === "untrusted_source") await excludeTargets(c, item.id);
         return c.update("review_items", item.id, { status: "resolved", resolution: "rejected" });
       case "defer":
         return c.update("review_items", item.id, { status: "deferred", resolution: "deferred" });
       case "exclude": {
-        const targets = await c.tx
-          .select()
-          .from(tReviewItemTarget)
-          .where(eq(tReviewItemTarget.reviewItemId, item.id));
-        for (const t of targets) {
-          const table = t.targetTable as TrackedTableName;
-          if (EXCLUDABLE.includes(table))
-            await c.update(table, t.targetId, { excluded: true } as never);
-        }
+        await excludeTargets(c, item.id);
         return c.update("review_items", item.id, { status: "excluded", resolution: "excluded" });
       }
       case "correct":

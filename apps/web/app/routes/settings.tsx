@@ -1,9 +1,18 @@
-import { backupNow, listBackups, providerStatuses, type ProviderId } from "@anki-cards/core";
+import {
+  backupNow,
+  listBackups,
+  providerStatuses,
+  type ProviderId,
+  addTrustedSource,
+  listTrustedSources,
+  removeTrustedSource,
+} from "@anki-cards/core";
 
 import { BackupPanel } from "~/components/backup-panel";
 
 import { ProviderPanel } from "~/components/provider-panel";
 import { SettingsForm } from "~/components/settings-form";
+import { TrustedSources } from "~/components/trusted-sources";
 import { checkAllProviders, startProviderTest } from "~/lib/providers.server";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import { saveSettingFromForm, settingViews } from "~/lib/settings.server";
@@ -19,6 +28,7 @@ export async function loader() {
     settings: await settingViews(db, null),
     providers: await providerStatuses(db),
     backups: await listBackups(db),
+    trusted: await listTrustedSources(db, null),
     dataDir: paths.data,
   };
 }
@@ -28,6 +38,14 @@ export async function action({ request }: Route.ActionArgs) {
   return handle(async () => {
     const { db, paths } = await rt();
     const intent = formString(form, "intent");
+    if (intent === "add-trusted") {
+      await addTrustedSource(db, null, formString(form, "domain"));
+      return { ok: true };
+    }
+    if (intent === "remove-trusted") {
+      await removeTrustedSource(db, formString(form, "trustedId"));
+      return { ok: true };
+    }
     if (intent === "backup") {
       const backup = await backupNow(db, paths, "manual");
       return { ok: true, message: `Backed up to ${backup?.path ?? ""}` };
@@ -56,6 +74,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
       </div>
       <ProviderPanel providers={loaderData.providers} />
       <BackupPanel backups={loaderData.backups} />
+      <TrustedSources sources={loaderData.trusted} scope="global" />
       <SettingsForm settings={loaderData.settings} scope="global" />
     </main>
   );
