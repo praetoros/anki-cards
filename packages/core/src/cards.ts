@@ -282,6 +282,14 @@ export async function setCardStatus(
   return result;
 }
 
+/** Anki numbers occlusions from 1; models often count from 0, so shift while keeping groups. */
+export function normaliseMaskOrdinals(shapes: OcclusionShape[]): OcclusionShape[] {
+  const lowest = Math.min(1, ...shapes.map((s) => s.ordinal ?? 1));
+  return shapes.map((s) =>
+    s.ordinal === undefined ? s : { ...s, ordinal: s.ordinal + 1 - lowest },
+  );
+}
+
 export async function setOcclusionMasks(
   db: TDatabase,
   w: Writer,
@@ -297,6 +305,7 @@ export async function setOcclusionMasks(
     if (values.some((v) => v < 0 || v > 1))
       throw new DomainError("invalid", "Mask coordinates are fractions from 0 to 1.");
   }
+  const shapes = normaliseMaskOrdinals(input.shapes);
   const { result } = await change(db, w.ctx, async (c) => {
     const card = await resolveRow(c.tx, "cards", w.ctx.libraryId, input.cardId);
     assertTopicScope(w, card.topicId);
@@ -308,7 +317,7 @@ export async function setOcclusionMasks(
     const values = {
       cardId: card.id,
       mediaId: media.id,
-      shapes: input.shapes,
+      shapes,
       origin: input.origin,
     };
     if (existing) return c.update("occlusion_masks", existing.id, values);

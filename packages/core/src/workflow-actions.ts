@@ -69,8 +69,8 @@ export async function ensureSession(
   });
 }
 
-/** Sources that have units without any coverage entry yet. */
-export async function unsynthesisedSources(db: TDb, libraryId: string) {
+/** Extracted sources with their unit count and how many of those units have coverage. */
+export async function sourceCoverage(db: TDb, libraryId: string) {
   const sources = await db
     .select()
     .from(tSource)
@@ -82,8 +82,8 @@ export async function unsynthesisedSources(db: TDb, libraryId: string) {
       .from(tSourceUnit)
       .where(eq(tSourceUnit.sourceId, s.id));
     if (units.length === 0) continue;
-    const covered = await db
-      .select({ id: tCoverageEntry.id })
+    const entries = await db
+      .select({ unitId: tCoverageEntry.sourceUnitId })
       .from(tCoverageEntry)
       .where(
         inArray(
@@ -91,17 +91,35 @@ export async function unsynthesisedSources(db: TDb, libraryId: string) {
           units.map((u) => u.id),
         ),
       );
-    if (covered.length < units.length)
-      out.push({ ...s, units: units.length, covered: covered.length });
+    out.push({ ...s, units: units.length, covered: new Set(entries.map((e) => e.unitId)).size });
   }
   return out;
 }
 
-export async function startSynthesis(db: TDatabase, libraryId: string, sourceIds?: string[]) {
-  const pending = await unsynthesisedSources(db, libraryId);
-  const selected = sourceIds?.length ? pending.filter((s) => sourceIds.includes(s.id)) : pending;
+/** Sources that have units without any coverage entry yet. */
+export async function unsynthesisedSources(db: TDb, libraryId: string) {
+  return (await sourceCoverage(db, libraryId)).filter((s) => s.covered < s.units);
+}
+
+/**
+ * Queues a synthesis job. By default it takes the sources with uncovered units; `again` also
+ * accepts fully covered sources, which the AI re-reads against the existing library.
+ */
+export async function startSynthesis(
+  db: TDatabase,
+  libraryId: string,
+  sourceIds?: string[],
+  options: { again?: boolean } = {},
+) {
+  const candidates = options.again
+    ? await sourceCoverage(db, libraryId)
+    : await unsynthesisedSources(db, libraryId);
+  const selected = sourceIds?.length
+    ? candidates.filter((s) => sourceIds.includes(s.id))
+    : candidates;
   if (selected.length === 0)
     throw new DomainError("invalid", "Every extracted source is already covered.");
+  const again = selected.some((s) => s.covered > 0);
   const session = await ensureSession(db, {
     libraryId,
     kind: "ingest",
@@ -119,7 +137,11 @@ export async function startSynthesis(db: TDatabase, libraryId: string, sourceIds
     sessionId: session.id,
     kind: "synthesis",
     trigger: "button",
-    prompt: `Synthesise these sources into the library, following the synthesis instructions.\n\n${list}\n\nWork through every source unit. Merge with existing topics and concepts where the meaning matches; do not duplicate. When finished, call complete_job.`,
+    prompt: `Synthesise these sources into the library, following the synthesis instructions.\n\n${list}\n\nWork through every source unit. Merge with existing topics and concepts where the meaning matches; do not duplicate.${
+      again
+        ? " Some units are already covered: re-read them against the existing knowledge items, correct or complete those items in place, and add only what is missing. Do not change items the user edited without raising a review item."
+        : ""
+    } When finished, call complete_job.`,
   });
 }
 

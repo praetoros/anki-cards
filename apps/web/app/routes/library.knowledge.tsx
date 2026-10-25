@@ -17,6 +17,7 @@ import { Textarea } from "@anki-cards/ui/components/textarea";
 import { useState } from "react";
 import { Form, Link, useSearchParams } from "react-router";
 
+import { ImagePreview } from "~/components/image-preview";
 import { MediaText } from "~/components/media-ref";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.knowledge";
@@ -185,19 +186,32 @@ export default function Knowledge({ loaderData, actionData }: Route.ComponentPro
           </div>
           {detail.media.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {detail.media.map(({ link, media }) => (
-                <figure key={link.id} className="flex max-w-xs flex-col gap-1 text-xs">
-                  <img
-                    src={`/media/${media.id}`}
-                    alt={media.description}
-                    className="max-h-48 rounded border object-contain"
-                  />
-                  <figcaption className="text-muted-foreground">
-                    {media.displayId} · {link.role.replace("_", " ")}
-                    {link.component && ` · ${link.component}`}
-                  </figcaption>
-                </figure>
-              ))}
+              {[...new Map(detail.media.map((m) => [m.media.id, m.media])).values()].map(
+                (media) => {
+                  const links = detail.media
+                    .filter((m) => m.media.id === media.id)
+                    .map((m) => m.link);
+                  return (
+                    <figure key={media.id} className="flex max-w-xs flex-col gap-1 text-xs">
+                      <ImagePreview
+                        src={`/media/${media.id}`}
+                        alt={media.description}
+                        title={`${media.displayId} · ${media.description}`}
+                        imgClassName="max-h-48 rounded border object-contain"
+                      />
+                      <figcaption className="text-muted-foreground">
+                        {media.displayId} ·{" "}
+                        {[...new Set(links.map((l) => l.role.replace("_", " ")))].join(", ")}
+                        {links
+                          .map((l) => l.component)
+                          .filter(Boolean)
+                          .map((c) => ` · ${c}`)
+                          .join("")}
+                      </figcaption>
+                    </figure>
+                  );
+                },
+              )}
             </div>
           )}
           <div className="flex flex-col gap-2">

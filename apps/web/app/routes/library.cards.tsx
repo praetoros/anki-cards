@@ -18,12 +18,15 @@ import {
   type PlanRowStatus,
 } from "@anki-cards/core";
 import { Badge } from "@anki-cards/ui/components/badge";
-import { Button } from "@anki-cards/ui/components/button";
+import { Button, buttonVariants } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
+import { ImageModal } from "~/components/image-preview";
 import { MaskEditor } from "~/components/mask-editor";
+import { useActionToast } from "~/lib/action-toast";
+import { formatDateTime } from "~/lib/format";
 import { MediaText } from "~/components/media-ref";
 import { cardsWithPreviews } from "~/lib/cards.server";
 import { formString, handle, rt } from "~/lib/runtime.server";
@@ -66,6 +69,13 @@ export async function action({ request, params }: Route.ActionArgs) {
           status: formString(form, "status") as PlanRowStatus,
         });
         return { ok: true };
+      case "accept-all-rows": {
+        const plan = await cardPlanView(db, topicId);
+        for (const row of plan?.rows.filter((r) => r.status === "proposed") ?? []) {
+          await updatePlanRow(db, w, { rowId: row.id, status: "accepted" });
+        }
+        return { ok: true };
+      }
       case "approve-plan":
         await approveGate(db, lib, "card_plan", topicId);
         return { ok: true, message: "Card plan approved." };
@@ -124,13 +134,35 @@ export async function action({ request, params }: Route.ActionArgs) {
   });
 }
 
+/**
+ * Sends clicks on images inside the preview frame to the page, which shows them in a modal.
+ * A srcdoc frame's `location.origin` is "null", so the target is "*"; the page checks the sender.
+ */
+const PREVIEW_IMAGE_SCRIPT = `<script>document.addEventListener("click",e=>{if(e.target.tagName==="IMG")parent.postMessage({type:"preview-image",src:e.target.src},"*")})</script>`;
+
 function Preview({ css, html }: { css: string; html: string }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [image, setImage] = useState<string | null>(null);
+  useEffect(() => {
+    const onMessage = (e: MessageEvent<{ type?: string; src?: string }>) => {
+      if (e.source === frame.current?.contentWindow && e.data.type === "preview-image")
+        setImage(e.data.src ?? null);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
   return (
-    <iframe
-      title="Card preview"
-      className="h-48 w-full rounded border bg-white"
-      srcDoc={`<style>${css} body{margin:0}</style><div class="card">${html}</div>`}
-    />
+    <>
+      <iframe
+        ref={frame}
+        title="Card preview"
+        className="h-56 w-full rounded border bg-white"
+        srcDoc={`<style>${css} body{margin:0} img{cursor:zoom-in;max-height:140px;width:auto}</style><div class="card">${html}</div>${PREVIEW_IMAGE_SCRIPT}`}
+      />
+      {image && (
+        <ImageModal src={image} alt="Card image" open onOpenChange={(o) => !o && setImage(null)} />
+      )}
+    </>
   );
 }
 
@@ -246,10 +278,12 @@ function CardItem({ entry }: { entry: CardEntry }) {
 export default function Cards({ loaderData, actionData }: Route.ComponentProps) {
   const d = loaderData;
   const busy = useNavigation().state !== "idle";
+  useActionToast(actionData);
   if (!d.topicId) {
     return <main className="p-6 text-sm text-muted-foreground">No topics yet.</main>;
   }
   const drafts = d.cards.filter((c) => c.card.status === "draft");
+  const setApproved = Boolean(d.setGate?.snapshot) && d.setGate?.blockers.length === 0;
   return (
     <main className="flex flex-col gap-4 p-4">
       <nav className="flex flex-wrap gap-1">
@@ -263,9 +297,6 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
           </Link>
         ))}
       </nav>
-      {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
-      {actionData?.message && <p className="text-sm text-muted-foreground">{actionData.message}</p>}
-
       <section className="flex flex-col gap-2 rounded-lg border p-3">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="font-semibold">Card plan</h2>
@@ -286,6 +317,19 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
             >
               {d.plan ? "Re-plan" : "Plan cards"}
             </Button>
+            {d.plan?.plan.status === "draft" &&
+              d.plan.rows.some((r) => r.status === "proposed") && (
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  name="intent"
+                  value="accept-all-rows"
+                  disabled={busy}
+                >
+                  Accept all rows
+                </Button>
+              )}
             {d.plan?.plan.status === "draft" && (
               <Button type="submit" size="sm" name="intent" value="approve-plan" disabled={busy}>
                 Approve plan
@@ -304,34 +348,56 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
           </p>
         )}
         {d.plan?.plan.summary && <p className="text-sm">{d.plan.plan.summary}</p>}
-        {d.plan?.rows.map((row) => (
-          <div key={row.id} className="flex flex-wrap items-center gap-2 border-t pt-2 text-sm">
-            <Badge variant="outline">{row.cardType.replace("_", " ")}</Badge>
-            <span className="min-w-0 flex-1">
-              {row.items.map((k) => k.displayId).join(", ")} — <MediaText text={row.rationale} />
-            </span>
-            <Badge variant={row.status === "rejected" ? "destructive" : "outline"}>
-              {row.status}
-            </Badge>
-            {d.plan?.plan.status === "draft" && (
-              <Form method="post" className="flex gap-1">
-                <input type="hidden" name="rowId" value={row.id} />
-                <input type="hidden" name="intent" value="row" />
-                <Button type="submit" size="xs" variant="ghost" name="status" value="accepted">
-                  Accept
-                </Button>
-                <Button type="submit" size="xs" variant="ghost" name="status" value="rejected">
-                  Reject
-                </Button>
-              </Form>
-            )}
-          </div>
-        ))}
+        {d.plan && d.plan.rows.length > 0 && (
+          <details open={d.plan.plan.status === "draft"} className="group">
+            <summary className="cursor-pointer text-sm text-muted-foreground">
+              {d.plan.rows.length} planned note(s)
+            </summary>
+            {d.plan.rows.map((row) => (
+              <div key={row.id} className="flex flex-wrap items-center gap-2 border-t pt-2 text-sm">
+                <Badge variant="outline">{row.cardType.replace("_", " ")}</Badge>
+                <span className="min-w-0 flex-1">
+                  {row.items.map((k) => k.displayId).join(", ")} —{" "}
+                  <MediaText text={row.rationale} />
+                </span>
+                <Badge variant={row.status === "rejected" ? "destructive" : "outline"}>
+                  {row.status}
+                </Badge>
+                {d.plan?.plan.status === "draft" && (
+                  <Form method="post" className="flex gap-1">
+                    <input type="hidden" name="rowId" value={row.id} />
+                    <input type="hidden" name="intent" value="row" />
+                    <Button type="submit" size="xs" variant="ghost" name="status" value="accepted">
+                      Accept
+                    </Button>
+                    <Button type="submit" size="xs" variant="ghost" name="status" value="rejected">
+                      Reject
+                    </Button>
+                  </Form>
+                )}
+              </div>
+            ))}
+          </details>
+        )}
       </section>
 
       <section className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="font-semibold">Cards ({d.cards.length})</h2>
+          {d.setGate?.snapshot && (
+            <Badge variant={setApproved ? "secondary" : "outline"}>
+              card set approved {formatDateTime(d.setGate.snapshot.createdAt)}
+            </Badge>
+          )}
+          {setApproved && (
+            <Link
+              to="../export"
+              relative="path"
+              className={buttonVariants({ size: "sm", variant: "outline" })}
+            >
+              Export
+            </Link>
+          )}
           <Form method="post" className="ml-auto flex gap-2">
             <input type="hidden" name="topicId" value={d.topicId} />
             {drafts.map((c) => (

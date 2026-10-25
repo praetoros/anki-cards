@@ -36,7 +36,7 @@ const mask = z.discriminatedUnion("shape", [
     top: fraction,
     width: fraction,
     height: fraction,
-    ordinal: z.number().int().min(1).optional(),
+    ordinal: z.number().int().min(0).optional(),
     label: z.string().optional(),
   }),
   z.object({
@@ -45,13 +45,13 @@ const mask = z.discriminatedUnion("shape", [
     top: fraction,
     rx: fraction,
     ry: fraction,
-    ordinal: z.number().int().min(1).optional(),
+    ordinal: z.number().int().min(0).optional(),
     label: z.string().optional(),
   }),
   z.object({
     shape: z.literal("polygon"),
     points: z.array(z.object({ x: fraction, y: fraction })).min(3),
-    ordinal: z.number().int().min(1).optional(),
+    ordinal: z.number().int().min(0).optional(),
     label: z.string().optional(),
   }),
 ]);

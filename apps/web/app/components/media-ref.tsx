@@ -1,6 +1,8 @@
 import { Fragment, useState } from "react";
 import { useParams } from "react-router";
 
+import { ImagePreview } from "./image-preview";
+
 /** Matches display ids (`MED-003`) and long ids (`med_01m5…`) of media assets. */
 const MEDIA_ID = /\b(MED-\d{3,}|med_[0-9a-z]{26})\b/g;
 
@@ -17,22 +19,15 @@ export function MediaRef({ id, size = "sm" }: { id: string; size?: "sm" | "md" }
   const url = mediaUrl(id, libraryId);
   if (failed) return <code className="text-xs">{id}</code>;
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      title={id}
+    <ImagePreview
+      src={url}
+      alt={id}
+      onError={() => setFailed(true)}
       className="mx-0.5 inline-flex max-w-full flex-col items-start gap-0.5 align-top"
+      imgClassName={`rounded border bg-white object-contain ${size === "md" ? "max-h-40" : "max-h-20"}`}
     >
-      <img
-        src={url}
-        alt={id}
-        loading="lazy"
-        onError={() => setFailed(true)}
-        className={`rounded border bg-white object-contain ${size === "md" ? "max-h-40" : "max-h-20"}`}
-      />
       <span className="font-mono text-[10px] text-muted-foreground">{id}</span>
-    </a>
+    </ImagePreview>
   );
 }
 

@@ -1,8 +1,12 @@
 import {
   approveGate,
+  cardPlanView,
   gateStatus,
   getLibrary,
+  latestSnapshot,
   libraryOutline,
+  listCards,
+  listExports,
   listReviewItems,
   listSources,
   pendingEnrichment,
@@ -22,6 +26,7 @@ import {
 } from "@anki-cards/ui/components/card";
 import { Form, Link, useNavigation } from "react-router";
 
+import { ConfirmSubmit } from "~/components/confirm-submit";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.overview";
@@ -47,7 +52,36 @@ export async function loader({ params }: Route.LoaderArgs) {
     awaitingAi: review.filter((r) => r.status === "awaiting_ai").length,
     synthesisGate: await gateStatus(db, libraryId, "synthesis"),
     enrichment: (await pendingEnrichment(db, libraryId)).length,
+    topicCards: await Promise.all(
+      outline.map(async (t) => {
+        const plan = await cardPlanView(db, t.id);
+        const cards = await listCards(db, t.id);
+        return {
+          id: t.id,
+          displayId: t.displayId,
+          title: t.title,
+          plan: plan?.plan.status ?? null,
+          planRows: plan?.rows.length ?? 0,
+          cards: cards.filter((c) => c.status !== "retired").length,
+          drafts: cards.filter((c) => c.status === "draft").length,
+          setApprovedAt: (await latestSnapshot(db, libraryId, "card_set", t.id))?.createdAt ?? null,
+        };
+      }),
+    ),
+    lastExport: (await listExports(db, libraryId))[0] ?? null,
   };
+}
+
+type TopicCards = Route.ComponentProps["loaderData"]["topicCards"][number];
+
+function nextCardStep(t: TopicCards, synthesisApproved: boolean) {
+  if (!synthesisApproved) return "Approve the synthesis first";
+  if (!t.plan) return "Plan cards";
+  if (t.plan === "draft") return `Review the plan (${t.planRows} rows)`;
+  if (t.cards === 0) return "Generate cards";
+  if (t.drafts > 0) return `Review ${t.drafts} draft card(s)`;
+  if (!t.setApprovedAt) return "Approve the card set";
+  return "Ready to export";
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -87,6 +121,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 export default function Overview({ loaderData, actionData }: Route.ComponentProps) {
   const d = loaderData;
   const busy = useNavigation().state !== "idle";
+  const partlyCovered = d.pending.filter((s) => s.covered > 0);
   return (
     <main className="flex flex-col gap-4 p-6">
       {d.library.description && (
@@ -116,17 +151,21 @@ export default function Overview({ loaderData, actionData }: Route.ComponentProp
               >
                 Sources
               </Link>
-              <Form method="post">
-                <Button
-                  type="submit"
-                  size="sm"
-                  name="intent"
-                  value="synthesise"
-                  disabled={busy || d.pending.length === 0}
-                >
-                  Synthesise {d.pending.length} source(s)
-                </Button>
-              </Form>
+              <ConfirmSubmit
+                fields={{ intent: "synthesise" }}
+                disabled={busy || d.pending.length === 0}
+                confirm={
+                  partlyCovered.length > 0
+                    ? {
+                        title: "Synthesise sources again?",
+                        description: `${partlyCovered.map((s) => `${s.displayId} (${s.covered}/${s.units} units)`).join(", ")} already ${partlyCovered.length === 1 ? "has" : "have"} knowledge in the library. The AI will re-read these sources and may change existing knowledge items; the changes can be reverted from History.`,
+                        action: "Synthesise",
+                      }
+                    : null
+                }
+              >
+                Synthesise {d.pending.length} source(s)
+              </ConfirmSubmit>
             </div>
           </CardContent>
         </Card>
@@ -210,6 +249,45 @@ export default function Overview({ loaderData, actionData }: Route.ComponentProp
           </CardContent>
         </Card>
       </div>
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>2. Cards and export</CardTitle>
+          <CardDescription>
+            Each topic is planned, generated and approved on its own; export takes every approved
+            card set.
+            {d.lastExport &&
+              ` Last export ${formatDateTime(d.lastExport.createdAt)}: ${d.lastExport.counts.total} card(s).`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 text-sm">
+          {d.topicCards.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-2 border-t pt-2">
+              <span className="font-mono text-xs text-muted-foreground">{t.displayId}</span>
+              <span className="min-w-0 flex-1 truncate">{t.title}</span>
+              <span className="text-xs text-muted-foreground">
+                {t.cards} card(s){t.setApprovedAt && " · set approved"}
+              </span>
+              <Link
+                to={`../cards?topic=${t.id}`}
+                relative="path"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                {nextCardStep(t, Boolean(d.synthesisGate.snapshot))}
+              </Link>
+            </div>
+          ))}
+          {d.topicCards.length === 0 && (
+            <p className="text-xs text-muted-foreground">Topics appear after synthesis.</p>
+          )}
+          <Link
+            to="../export"
+            relative="path"
+            className={`${buttonVariants({ size: "sm" })} self-start`}
+          >
+            Export .apkg
+          </Link>
+        </CardContent>
+      </Card>
     </main>
   );
 }

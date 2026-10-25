@@ -24,6 +24,10 @@ function valueText(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
+/**
+ * Each row saves itself: choices on change, typed values on blur or Enter. Inputs are keyed by
+ * the stored value so they show the new value after a save or reset.
+ */
 function SettingRow({ setting, scope }: { setting: SettingView; scope: "global" | "library" }) {
   const fetcher = useFetcher<{ error?: string; message?: string }>();
   const inherited = scope === "library" && setting.source !== "library";
@@ -31,10 +35,26 @@ function SettingRow({ setting, scope }: { setting: SettingView; scope: "global" 
     setting.kind === "provider"
       ? (setting.value as { provider: string; model: string | null; effort: string | null } | null)
       : null;
+  const stored = JSON.stringify(setting.value);
+  const send = (form: HTMLFormElement | null, intent: "save" | "reset") => {
+    if (!form) return;
+    const data = new FormData(form);
+    data.set("intent", intent);
+    void fetcher.submit(data, { method: "post" });
+  };
+  const save = (e: React.SyntheticEvent<HTMLInputElement | HTMLSelectElement>) =>
+    send(e.currentTarget.form, "save");
+  const saveIfChanged = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (fetcher.state === "idle" && e.currentTarget.value !== e.currentTarget.defaultValue) save(e);
+  };
 
   return (
     <fetcher.Form
       method="post"
+      onSubmit={(e) => {
+        e.preventDefault();
+        send(e.currentTarget, "save");
+      }}
       className="grid gap-2 border-b py-3 md:grid-cols-[220px_1fr_auto] md:items-center"
     >
       <input type="hidden" name="key" value={setting.key} />
@@ -51,16 +71,24 @@ function SettingRow({ setting, scope }: { setting: SettingView; scope: "global" 
         {setting.kind === "bool" && (
           <label className="flex items-center gap-2 text-sm">
             <input
+              key={stored}
               type="checkbox"
               name="value"
               defaultChecked={setting.value === true}
+              onChange={save}
               className="size-4"
             />{" "}
             On
           </label>
         )}
         {setting.kind === "enum" && (
-          <select name="value" defaultValue={valueText(setting.value)} className={selectClass}>
+          <select
+            key={stored}
+            name="value"
+            defaultValue={valueText(setting.value)}
+            onChange={save}
+            className={selectClass}
+          >
             {setting.options?.map((o) => (
               <option key={o} value={o}>
                 {o}
@@ -70,7 +98,13 @@ function SettingRow({ setting, scope }: { setting: SettingView; scope: "global" 
         )}
         {setting.kind === "provider" && (
           <>
-            <select name="provider" defaultValue={provider?.provider ?? ""} className={selectClass}>
+            <select
+              key={`p${stored}`}
+              name="provider"
+              defaultValue={provider?.provider ?? ""}
+              onChange={save}
+              className={selectClass}
+            >
               {setting.key !== "providers.default" && <option value="">Use default</option>}
               {setting.options?.map((o) => (
                 <option key={o} value={o}>
@@ -79,12 +113,20 @@ function SettingRow({ setting, scope }: { setting: SettingView; scope: "global" 
               ))}
             </select>
             <Input
+              key={`m${stored}`}
               name="model"
               defaultValue={provider?.model ?? ""}
+              onBlur={saveIfChanged}
               placeholder="Model (CLI default)"
               className="w-48"
             />
-            <select name="effort" defaultValue={provider?.effort ?? ""} className={selectClass}>
+            <select
+              key={`e${stored}`}
+              name="effort"
+              defaultValue={provider?.effort ?? ""}
+              onChange={save}
+              className={selectClass}
+            >
               <option value="">Effort (default)</option>
               {["low", "medium", "high", "xhigh", "max"].map((e) => (
                 <option key={e} value={e}>
@@ -99,9 +141,11 @@ function SettingRow({ setting, scope }: { setting: SettingView; scope: "global" 
           setting.kind === "number" ||
           setting.kind === "list") && (
           <Input
+            key={stored}
             name="value"
             type={setting.kind === "number" ? "number" : "text"}
             defaultValue={valueText(setting.value)}
+            onBlur={saveIfChanged}
             placeholder={setting.kind === "path" ? "Not set" : undefined}
             className="min-w-64 flex-1"
           />
@@ -113,19 +157,17 @@ function SettingRow({ setting, scope }: { setting: SettingView; scope: "global" 
           <span className="text-sm text-muted-foreground">{fetcher.data.message}</span>
         )}
       </div>
-      <div className="flex gap-1">
-        <Button
-          type="submit"
-          size="sm"
-          name="intent"
-          value="save"
-          disabled={fetcher.state !== "idle"}
-        >
-          Save
-        </Button>
+      <div className="flex min-w-24 items-center justify-end gap-1">
+        {fetcher.state !== "idle" && <span className="text-xs text-muted-foreground">Saving…</span>}
         {((scope === "library" && setting.source === "library") ||
           (scope === "global" && setting.source === "global")) && (
-          <Button type="submit" size="sm" variant="ghost" name="intent" value="reset">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={fetcher.state !== "idle"}
+            onClick={(e) => send(e.currentTarget.form, "reset")}
+          >
             Reset
           </Button>
         )}

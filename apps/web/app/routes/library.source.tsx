@@ -3,6 +3,7 @@ import { Badge } from "@anki-cards/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@anki-cards/ui/components/card";
 import { Link } from "react-router";
 
+import { ImagePreview } from "~/components/image-preview";
 import { MediaRef, MediaText } from "~/components/media-ref";
 import { rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.source";
@@ -65,20 +66,18 @@ export default function SourceDetail({ loaderData }: Route.ComponentProps) {
             <CardContent className="grid gap-3 md:grid-cols-[minmax(0,320px)_1fr]">
               <div className="flex flex-col gap-2">
                 {unit.renderMediaId && (
-                  <img
+                  <ImagePreview
                     src={`/media/${unit.renderMediaId}`}
                     alt={`Render of ${locationLabel(unit.location)}`}
-                    className="w-full rounded border"
-                    loading="lazy"
+                    imgClassName="w-full rounded border"
                   />
                 )}
                 {unit.mediaIds.map((id) => (
-                  <img
+                  <ImagePreview
                     key={id}
                     src={`/media/${id}`}
-                    alt=""
-                    className="max-h-48 rounded border object-contain"
-                    loading="lazy"
+                    alt={`Image from ${locationLabel(unit.location)}`}
+                    imgClassName="max-h-48 rounded border object-contain"
                   />
                 ))}
               </div>

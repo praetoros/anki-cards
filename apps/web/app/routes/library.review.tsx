@@ -13,6 +13,7 @@ import { Button } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
+import { ImagePreview } from "~/components/image-preview";
 import { MediaRef, MediaText, MediaValue } from "~/components/media-ref";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
@@ -168,10 +169,11 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
             </p>
           )}
           {proposalMedia && (
-            <img
+            <ImagePreview
               src={`/media/${proposalMedia}`}
-              alt="Proposed"
-              className="max-h-64 self-start rounded border object-contain"
+              alt="Proposed image"
+              className="self-start"
+              imgClassName="max-h-64 rounded border object-contain"
             />
           )}
           <Payload payload={selected.item.payload} />
