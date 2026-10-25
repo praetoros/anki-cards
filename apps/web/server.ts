@@ -10,6 +10,7 @@ import { createRequestListener } from "@react-router/node";
 const host = "127.0.0.1";
 const port = Number(process.env.ANKI_CARDS_PORT ?? 4317);
 const clientDir = fileURLToPath(new URL("./build/client", import.meta.url));
+process.env.ANKI_CARDS_ROOT ??= fileURLToPath(new URL("../../", import.meta.url));
 
 const mimeTypes: Record<string, string> = {
   ".css": "text/css",

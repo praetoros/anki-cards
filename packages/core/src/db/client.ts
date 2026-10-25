@@ -1,14 +1,14 @@
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
 import { drizzle } from "drizzle-orm/node-sqlite";
 import { migrate } from "drizzle-orm/node-sqlite/migrator";
 
+import { repoRoot } from "../paths.ts";
 import { relations } from "./relations.ts";
 
-export const migrationsFolder = fileURLToPath(new URL("../../drizzle", import.meta.url));
+export const migrationsFolder = join(repoRoot, "packages", "core", "drizzle");
 
 export function createDb(path: string) {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

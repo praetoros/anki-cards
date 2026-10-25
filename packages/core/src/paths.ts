@@ -2,7 +2,9 @@ import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
+/** The cloned repository. Bundled builds can't derive it from module URLs, so the server sets it. */
+export const repoRoot =
+  process.env.ANKI_CARDS_ROOT ?? fileURLToPath(new URL("../../../", import.meta.url));
 
 export interface AppPaths {
   data: string;
