@@ -2,10 +2,19 @@ import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 import type { TDatabase, TDb } from "./db/client.ts";
 import { startGeneration, startPlanning } from "./cards.ts";
-import { tCard, tCardPlan, tReviewItem, tTopic } from "./db/schema/index.ts";
-import type { Gate } from "./domain/enums.ts";
+import {
+  tCard,
+  tCardPlan,
+  tCardPlanRow,
+  tJob,
+  tReviewItem,
+  tSession,
+  tTopic,
+} from "./db/schema/index.ts";
+import type { Gate, JobKind } from "./domain/enums.ts";
 import { DomainError } from "./errors.ts";
 import { change } from "./history.ts";
+import { ACTIVE_JOB_STATUSES } from "./jobs.ts";
 import { raiseReviewItem } from "./review.ts";
 import { getSetting } from "./settings.ts";
 import { createSnapshot, latestSnapshot } from "./snapshots.ts";
@@ -16,7 +25,47 @@ export const GATE_LABEL: Record<Gate, string> = {
   card_set: "Card set approved",
 };
 
-/** Open decisions that stop a gate. Deferred items count as acknowledged and don't block. */
+/** Jobs that are still changing what a gate would approve. */
+const GATE_JOB_KINDS: Record<Gate, JobKind[]> = {
+  synthesis: ["synthesis", "feedback", "enrichment"],
+  card_plan: ["planning", "feedback"],
+  card_set: ["generation", "feedback"],
+};
+
+/**
+ * Kinds of the library's active jobs among `kinds`. With a topic, only jobs of sessions that
+ * cover it (the library-wide ingest session covers every topic).
+ */
+async function activeJobKinds(
+  db: TDb,
+  libraryId: string,
+  kinds: JobKind[],
+  topicId: string | null,
+) {
+  const jobs = await db
+    .select({ kind: tJob.kind, scope: tSession.scope })
+    .from(tJob)
+    .innerJoin(tSession, eq(tSession.id, tJob.sessionId))
+    .where(
+      and(
+        eq(tJob.libraryId, libraryId),
+        inArray(tJob.kind, kinds),
+        inArray(tJob.status, ACTIVE_JOB_STATUSES),
+      ),
+    );
+  return [
+    ...new Set(
+      jobs
+        .filter((j) => !topicId || j.scope.kind === "library" || j.scope.topicIds.includes(topicId))
+        .map((j) => j.kind),
+    ),
+  ];
+}
+
+/**
+ * What stops a gate: open decisions and jobs still running for it. Deferred items count as
+ * acknowledged and don't block.
+ */
 export async function gateBlockers(
   db: TDb,
   libraryId: string,
@@ -41,6 +90,8 @@ export async function gateBlockers(
       .where(and(eq(tCardPlan.topicId, topicId), eq(tCardPlan.status, "draft")));
     if (plans.length === 0) reasons.push("There is no draft card plan for this topic.");
   }
+  const busy = await activeJobKinds(db, libraryId, GATE_JOB_KINDS[gate], topicId ?? null);
+  if (busy.length > 0) reasons.push(`Wait for the running ${busy.join(" and ")} job to finish.`);
   if (gate === "card_set" && topicId) {
     const drafts = await db
       .select({ id: tCard.id })
@@ -72,7 +123,15 @@ export async function approveGate(
         .select()
         .from(tCardPlan)
         .where(and(eq(tCardPlan.topicId, topicId), eq(tCardPlan.status, "draft")));
-      for (const p of plans) await c.update("card_plans", p.id, { status: "approved" });
+      for (const p of plans) {
+        await c.update("card_plans", p.id, { status: "approved" });
+        // Approving a plan accepts every row the user did not reject.
+        const proposed = await c.tx
+          .select({ id: tCardPlanRow.id })
+          .from(tCardPlanRow)
+          .where(and(eq(tCardPlanRow.planId, p.id), eq(tCardPlanRow.status, "proposed")));
+        for (const r of proposed) await c.update("card_plan_rows", r.id, { status: "accepted" });
+      }
     });
   }
   const snapshot = await createSnapshot(db, {

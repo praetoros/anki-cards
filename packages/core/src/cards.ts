@@ -551,6 +551,15 @@ export async function startGeneration(db: TDatabase, libraryId: string, topicId:
     .from(tCardPlan)
     .where(and(eq(tCardPlan.topicId, topic.id), eq(tCardPlan.status, "approved")));
   if (!plan) throw new DomainError("gate_blocked", "Approve the card plan for this topic first.");
+  // Plans approved before approval accepted their rows can still hold proposed ones.
+  const proposed = await db
+    .select({ id: tCardPlanRow.id })
+    .from(tCardPlanRow)
+    .where(and(eq(tCardPlanRow.planId, plan.id), eq(tCardPlanRow.status, "proposed")));
+  if (proposed.length > 0)
+    await change(db, { actor: "user", action: "accept_plan_rows", libraryId }, async (c) => {
+      for (const r of proposed) await c.update("card_plan_rows", r.id, { status: "accepted" });
+    });
   return enqueueJob(db, {
     sessionId: session.id,
     kind: "generation",

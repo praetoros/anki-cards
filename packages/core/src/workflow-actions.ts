@@ -9,10 +9,11 @@ import {
   tSource,
   tSourceUnit,
   type SessionScope,
+  type TReviewItemS,
 } from "./db/schema/index.ts";
-import type { JobKind, SessionKind } from "./domain/enums.ts";
+import type { JobKind, JobStatus, SessionKind } from "./domain/enums.ts";
 import { DomainError } from "./errors.ts";
-import { enqueueJob, updateJob } from "./jobs.ts";
+import { ACTIVE_JOB_STATUSES, enqueueJob, updateJob } from "./jobs.ts";
 import { createSession } from "./sessions.ts";
 import { getSetting, providerForStage, type ProviderStage } from "./settings.ts";
 
@@ -165,8 +166,36 @@ export async function sendFeedback(
         reviewItemIds?.length ? inArray(tReviewItem.id, reviewItemIds) : undefined,
       ),
     );
-  if (items.length === 0)
+  const withAi = await reviewItemsWithAi(db, libraryId, ["running", "waiting", "paused"]);
+  const unsent = items.filter((i) => !withAi.has(i.id));
+  if (items.length > 0 && unsent.length === 0)
+    throw new DomainError("conflict", "The AI is already working on these items.");
+  if (unsent.length === 0)
     throw new DomainError("invalid", "No review items are waiting for the AI.");
+  return queueFeedback(db, libraryId, unsent, trigger);
+}
+
+/** Review items handed to a feedback job that has not finished (by default including queued). */
+export async function reviewItemsWithAi(
+  db: TDb,
+  libraryId: string,
+  statuses: JobStatus[] = ACTIVE_JOB_STATUSES,
+) {
+  const jobs = await db
+    .select({ ids: tJob.reviewItemIds })
+    .from(tJob)
+    .where(
+      and(eq(tJob.libraryId, libraryId), eq(tJob.kind, "feedback"), inArray(tJob.status, statuses)),
+    );
+  return new Set(jobs.flatMap((j) => j.ids));
+}
+
+async function queueFeedback(
+  db: TDatabase,
+  libraryId: string,
+  items: TReviewItemS[],
+  trigger: "button" | "auto",
+) {
   const sessions = await db
     .select()
     .from(tSession)

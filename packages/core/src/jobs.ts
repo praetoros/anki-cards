@@ -11,6 +11,9 @@ import { getSession } from "./sessions.ts";
 
 export const ACTIVE_JOB_STATUSES: JobStatus[] = ["queued", "running", "waiting", "paused"];
 
+/** Stage jobs that would duplicate work if a second one ran in the same session. */
+const SINGLE_RUN_KINDS: JobKind[] = ["synthesis", "planning", "generation", "enrichment"];
+
 export async function enqueueJob(
   db: TDb,
   input: {
@@ -26,6 +29,23 @@ export async function enqueueJob(
     throw new DomainError("invalid", "This session is archived. Start a new session.");
   }
   const job = await withWriteLock(async () => {
+    if (SINGLE_RUN_KINDS.includes(input.kind)) {
+      const [active] = await db
+        .select({ id: tJob.id })
+        .from(tJob)
+        .where(
+          and(
+            eq(tJob.sessionId, session.id),
+            eq(tJob.kind, input.kind),
+            inArray(tJob.status, ACTIVE_JOB_STATUSES),
+          ),
+        );
+      if (active)
+        throw new DomainError(
+          "conflict",
+          `A ${input.kind} job is already queued or running in "${session.title}". Wait for it to finish or cancel it.`,
+        );
+    }
     const [row] = await db
       .insert(tJob)
       .values({

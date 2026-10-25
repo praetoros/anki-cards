@@ -382,6 +382,22 @@ export async function assertApproved(
 }
 
 /** User feedback on library content: a `feedback` item already waiting for the AI. */
+/** Ids among `targetIds` that an open or AI-pending review item is about. */
+export async function targetsWithOpenReview(db: TDb, targetIds: string[]) {
+  if (targetIds.length === 0) return new Set<string>();
+  const rows = await db
+    .select({ targetId: tReviewItemTarget.targetId })
+    .from(tReviewItemTarget)
+    .innerJoin(tReviewItem, eq(tReviewItem.id, tReviewItemTarget.reviewItemId))
+    .where(
+      and(
+        inArray(tReviewItemTarget.targetId, targetIds),
+        inArray(tReviewItem.status, ["open", "awaiting_ai"]),
+      ),
+    );
+  return new Set(rows.map((r) => r.targetId));
+}
+
 export async function createFeedbackItem(
   db: TDatabase,
   libraryId: string,

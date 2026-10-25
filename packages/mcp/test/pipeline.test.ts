@@ -12,7 +12,6 @@ import {
   startGeneration,
   startPlanning,
   startSynthesis,
-  updatePlanRow,
 } from "@anki-cards/core";
 import { unzipSync } from "fflate";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -89,8 +88,10 @@ describe("pipeline: fixture → synthesis → plan → cards → .apkg", () => {
     void h.runner.tick();
     expect((await waitForJob(db, planning.id)).status).toBe("done");
     const plan = await cardPlanView(db, topic.id);
-    await updatePlanRow(db, user(lib), { rowId: plan!.rows[0]!.id, status: "accepted" });
+    expect(plan!.rows[0]!.status).toBe("proposed");
     await approveGate(db, lib, "card_plan", topic.id);
+    // Approving accepts the rows the user left as proposed, so generation sees them.
+    expect((await cardPlanView(db, topic.id))!.rows.map((r) => r.status)).toEqual(["accepted"]);
 
     h.scenario([
       {
