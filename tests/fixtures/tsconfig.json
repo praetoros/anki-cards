@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "typeRoots": ["../../packages/ingest/node_modules/@types"]
+  },
+  "include": ["."]
+}
