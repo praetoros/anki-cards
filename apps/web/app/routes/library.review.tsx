@@ -3,6 +3,7 @@ import {
   listReviewItems,
   REVIEW_ACTIONS,
   reviewItemDetail,
+  reviewItemsWithAi,
   scheduleAutoFeedback,
   sendFeedback,
   type ReviewAction,
@@ -11,10 +12,13 @@ import {
 import { Badge } from "@anki-cards/ui/components/badge";
 import { Button } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
-import { Form, Link, useNavigation, useSearchParams } from "react-router";
+import { LoaderCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Form, Link, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { ImagePreview } from "~/components/image-preview";
 import { MediaRef, MediaText, MediaValue } from "~/components/media-ref";
+import { useActionToast } from "~/lib/action-toast";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import { describeTargets } from "~/lib/targets.server";
@@ -44,7 +48,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       targetViews: await describeTargets(db, params.libraryId, detail.targets),
     };
   }
-  return { items, filter, selected };
+  return { items, filter, selected, withAi: [...(await reviewItemsWithAi(db, params.libraryId))] };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -65,9 +69,22 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (["correct", "comment", "approve", "accept"].includes(action)) {
       await scheduleAutoFeedback(db, params.libraryId);
     }
-    return { ok: true, message: "Saved." };
+    return {
+      ok: true,
+      message: ACTION_DONE[action] ?? "Saved.",
+      next: formString(form, "nextItemId") || null,
+    };
   });
 }
+
+const ACTION_DONE: Partial<Record<ReviewAction, string>> = {
+  accept: "Suggestion accepted.",
+  correct: "Feedback saved for the AI.",
+  approve: "Approved.",
+  reject: "Rejected.",
+  defer: "Deferred.",
+  exclude: "Excluded.",
+};
 
 const CATEGORY: Record<string, { label: string; variant: "destructive" | "default" | "outline" }> =
   {
@@ -76,18 +93,34 @@ const CATEGORY: Record<string, { label: string; variant: "destructive" | "defaul
     informational: { label: "Informational", variant: "outline" },
   };
 
+/** Row ids such as `cpr_01m5…` mean nothing to the user; media ids still show the image. */
+const INTERNAL_ID = /^[a-z]+_[0-9a-z]{26}$/;
+
+/** `includeVisualSearch` → `Include visual search`. */
+function fieldLabel(key: string) {
+  const words = key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\burl\b/g, "URL");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 function Payload({ payload }: { payload: Record<string, unknown> }) {
   const entries = Object.entries(payload).filter(
-    ([k]) => k !== "conceptIds" && k !== "knowledgeItemIds",
+    ([k, v]) =>
+      k !== "conceptIds" &&
+      k !== "knowledgeItemIds" &&
+      !(typeof v === "string" && INTERNAL_ID.test(v) && !v.startsWith("med_")),
   );
   if (entries.length === 0) return null;
   return (
     <dl className="grid grid-cols-[140px_1fr] gap-x-2 gap-y-1 text-sm">
       {entries.map(([k, v]) => (
         <div key={k} className="contents">
-          <dt className="text-muted-foreground">{k}</dt>
+          <dt className="text-muted-foreground">{fieldLabel(k)}</dt>
           <dd className="whitespace-pre-wrap">
-            <MediaValue value={v} max={2000} />
+            {typeof v === "boolean" ? v ? "yes" : "no" : <MediaValue value={v} max={2000} />}
           </dd>
         </div>
       ))}
@@ -98,8 +131,26 @@ function Payload({ payload }: { payload: Record<string, unknown> }) {
 export default function Review({ loaderData, actionData }: Route.ComponentProps) {
   const { items, selected, filter } = loaderData;
   const [params] = useSearchParams();
+  useActionToast(actionData);
   const busy = useNavigation().state !== "idle";
-  const awaiting = items.filter((i) => i.status === "awaiting_ai").length;
+  const navigate = useNavigate();
+  const [message, setMessage] = useState("");
+  useEffect(() => setMessage(""), [selected?.item.id]);
+  // After a decision, move on to the next open item so the queue can be worked top to bottom.
+  const open = items.filter((i) => i.status === "open");
+  const at = open.findIndex((i) => i.id === selected?.item.id);
+  const nextItem = (at >= 0 ? [...open.slice(at + 1), ...open.slice(0, at)] : open)[0]?.id;
+  useEffect(() => {
+    if (actionData && "next" in actionData && actionData.next) {
+      const target = new URLSearchParams(params);
+      target.set("item", actionData.next);
+      void navigate(`?${target.toString()}`, { replace: true, preventScrollReset: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionData]);
+  const withAi = new Set(loaderData.withAi);
+  const awaiting = items.filter((i) => i.status === "awaiting_ai" && !withAi.has(i.id)).length;
+  const working = items.filter((i) => i.status === "awaiting_ai" && withAi.has(i.id)).length;
   const media: unknown = selected?.item.payload["mediaId"];
   const proposalMedia = typeof media === "string" ? media : null;
   const link = (patch: Record<string, string>) => {
@@ -123,13 +174,44 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
           ))}
         </div>
         {awaiting > 0 && (
-          <Form method="post">
-            <Button type="submit" size="sm" name="intent" value="send-feedback" disabled={busy}>
-              Send {awaiting} item(s) to AI
+          <Form
+            method="post"
+            className="flex flex-col gap-2 rounded-md border border-rose-gold/40 bg-accent/20 p-2 text-sm"
+          >
+            <span>
+              {awaiting === 1 ? "1 item is" : `${awaiting} items are`} ready for the AI. Send them
+              when you have finished reviewing; the AI works through them together.
+            </span>
+            <Button
+              type="submit"
+              size="sm"
+              name="intent"
+              value="send-feedback"
+              disabled={busy}
+              className="self-start"
+            >
+              Send {awaiting} to the AI
             </Button>
           </Form>
         )}
-        {items.length === 0 && <p className="text-sm text-muted-foreground">Nothing here.</p>}
+        {working > 0 && (
+          <p className="flex items-center gap-2 rounded-md border p-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin text-rose-gold" />
+            The AI is working on {working === 1 ? "1 item" : `${working} items`}. Its replies appear
+            on each item.
+          </p>
+        )}
+        {items.length === 0 &&
+          (filter === "active" ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing needs your review.{" "}
+              <Link to=".." className="text-rose-gold underline">
+                See the next step
+              </Link>
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nothing here.</p>
+          ))}
         {items.map((item) => (
           <Link
             key={item.id}
@@ -141,7 +223,11 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
               <Badge variant={CATEGORY[item.category]?.variant ?? "outline"}>
                 {item.kind.replaceAll("_", " ")}
               </Badge>
-              {item.status === "awaiting_ai" && <Badge variant="secondary">waiting for AI</Badge>}
+              {item.status === "awaiting_ai" && (
+                <Badge variant="secondary">
+                  {withAi.has(item.id) ? "with the AI" : "ready for the AI"}
+                </Badge>
+              )}
             </span>
             <span>{item.title}</span>
             {item.suggestion && item.status === "open" && (
@@ -225,6 +311,7 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
               key={`suggestion-${selected.item.id}`}
             >
               <input type="hidden" name="itemId" value={selected.item.id} />
+              {nextItem && <input type="hidden" name="nextItemId" value={nextItem} />}
               <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 Suggested resolution
               </span>
@@ -245,83 +332,92 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
               )}
             </Form>
           )}
-          <Form method="post" className="flex flex-col gap-2" key={selected.item.id}>
-            <input type="hidden" name="itemId" value={selected.item.id} />
-            <Textarea
-              name="message"
-              rows={3}
-              placeholder={
-                selected.item.suggestion
-                  ? "Or tell the AI what to do instead"
-                  : "Correction or comment for the AI"
-              }
-            />
-            {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                size="sm"
-                variant={selected.item.suggestion ? "outline" : "default"}
-                name="intent"
-                value="correct"
-                disabled={busy}
-              >
-                Send feedback
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                variant="outline"
-                name="intent"
-                value="comment"
-                disabled={busy}
-              >
-                Comment
-              </Button>
-              {!selected.item.suggestion && (
+          {withAi.has(selected.item.id) ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin text-rose-gold" />
+              The AI is working on this item. You can act on it again once it replies.
+            </p>
+          ) : (
+            <Form method="post" className="flex flex-col gap-2" key={selected.item.id}>
+              <input type="hidden" name="itemId" value={selected.item.id} />
+              {nextItem && <input type="hidden" name="nextItemId" value={nextItem} />}
+              <Textarea
+                name="message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={3}
+                placeholder={
+                  selected.item.suggestion
+                    ? "Or tell the AI what to do instead"
+                    : "Correction or comment for the AI"
+                }
+              />
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="submit"
                   size="sm"
-                  variant="secondary"
+                  variant={selected.item.suggestion ? "outline" : "default"}
                   name="intent"
-                  value="approve"
-                  disabled={busy}
+                  value="correct"
+                  disabled={busy || message.trim() === ""}
+                  title="The AI changes the library as you describe and replies here."
                 >
-                  Approve
+                  Send feedback
                 </Button>
-              )}
-              <Button
-                type="submit"
-                size="sm"
-                variant="ghost"
-                name="intent"
-                value="reject"
-                disabled={busy}
-              >
-                Reject
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                variant="ghost"
-                name="intent"
-                value="defer"
-                disabled={busy}
-              >
-                Defer
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                variant="ghost"
-                name="intent"
-                value="exclude"
-                disabled={busy}
-              >
-                Exclude
-              </Button>
-            </div>
-          </Form>
+                {!selected.item.suggestion && (
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="secondary"
+                    name="intent"
+                    value="approve"
+                    disabled={busy}
+                  >
+                    Approve
+                  </Button>
+                )}
+                <span className="ml-auto flex flex-wrap gap-1">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="ghost"
+                    name="intent"
+                    value="defer"
+                    disabled={busy}
+                    title="Set it aside for later. A deferred item no longer blocks approval."
+                  >
+                    Defer
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="ghost"
+                    name="intent"
+                    value="reject"
+                    disabled={busy}
+                    title="Close it without any change."
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="ghost"
+                    name="intent"
+                    value="exclude"
+                    disabled={busy}
+                    title="Close it and leave the knowledge it is about out of the cards."
+                  >
+                    Exclude
+                  </Button>
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Defer sets it aside, Reject closes it unchanged, Exclude also keeps the affected
+                knowledge out of the cards.
+              </p>
+            </Form>
+          )}
         </section>
       )}
     </main>

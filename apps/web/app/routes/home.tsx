@@ -6,6 +6,8 @@ import { Textarea } from "@anki-cards/ui/components/textarea";
 import { ArrowRight, Plus, Sparkles } from "lucide-react";
 import { Form, Link, redirect } from "react-router";
 
+import { useActionToast } from "~/lib/action-toast";
+import { SYSTEM_LIBRARY_ID } from "~/lib/providers.server";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/home";
 
@@ -15,7 +17,9 @@ export function meta() {
 
 export async function loader() {
   const { db } = await rt();
-  return { libraries: await listLibraries(db) };
+  return {
+    libraries: (await listLibraries(db)).filter((l) => l.id !== SYSTEM_LIBRARY_ID),
+  };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -31,6 +35,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData, actionData }: Route.ComponentProps) {
+  useActionToast(actionData);
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pt-14 pb-16">
       <header className="flex max-w-2xl animate-rise flex-col gap-3">
@@ -94,7 +99,6 @@ export default function Home({ loaderData, actionData }: Route.ComponentProps) {
             <Form method="post" className="flex flex-col gap-3 px-(--card-spacing)">
               <Input name="name" placeholder="Name, e.g. Cardiology" required />
               <Textarea name="description" placeholder="Description (optional)" rows={2} />
-              {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
               <Button type="submit" size="lg">
                 <Plus /> Create library
               </Button>

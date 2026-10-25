@@ -19,6 +19,7 @@ import { Form, Link, useSearchParams } from "react-router";
 
 import { ImagePreview } from "~/components/image-preview";
 import { MediaText } from "~/components/media-ref";
+import { useActionToast } from "~/lib/action-toast";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.knowledge";
 
@@ -119,6 +120,7 @@ function FeedbackForm({ table, id }: { table: string; id: string }) {
 export default function Knowledge({ loaderData, actionData }: Route.ComponentProps) {
   const { outline, detail } = loaderData;
   const [params] = useSearchParams();
+  useActionToast(actionData);
   const [editing, setEditing] = useState<string | null>(null);
   if (outline.length === 0) {
     return (
@@ -180,7 +182,6 @@ export default function Knowledge({ loaderData, actionData }: Route.ComponentPro
             </Form>
             <FeedbackForm table="concepts" id={detail.concept.id} />
           </div>
-          {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
           <div className="text-sm leading-relaxed whitespace-pre-wrap">
             <MediaText text={detail.concept.explanation} />
           </div>

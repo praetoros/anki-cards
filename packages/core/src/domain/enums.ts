@@ -181,3 +181,14 @@ export type ProviderId = (typeof PROVIDERS)[number];
 
 export const ACTORS = ["user", "ai", "system"] as const;
 export type Actor = (typeof ACTORS)[number];
+
+/** The stages a library goes through, in the order the user meets them. */
+export const WORKFLOW_STEPS = [
+  { id: "sources", label: "Add sources" },
+  { id: "synthesis", label: "Synthesise" },
+  { id: "review", label: "Review" },
+  { id: "approve", label: "Approve synthesis" },
+  { id: "cards", label: "Make cards" },
+  { id: "export", label: "Export" },
+] as const;
+export type WorkflowStepId = (typeof WORKFLOW_STEPS)[number]["id"];

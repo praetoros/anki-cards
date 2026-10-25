@@ -4,6 +4,7 @@ import {
   masksForCards,
   NOTE_TYPE_FOR,
   noteFields,
+  targetsWithOpenReview,
   type TCardS,
   type TDb,
 } from "@anki-cards/core";
@@ -29,6 +30,10 @@ export async function cardsWithPreviews(db: TDb, topicId: string) {
     db,
     cards.map((c) => c.id),
   );
+  const withFeedback = await targetsWithOpenReview(
+    db,
+    cards.map((c) => c.id),
+  );
   const out = [];
   for (const card of cards) {
     const type = NOTE_TYPE_FOR[card.cardType];
@@ -50,6 +55,7 @@ export async function cardsWithPreviews(db: TDb, topicId: string) {
       css: type.css,
       previews,
       masks: masks.find((m) => m.cardId === card.id)?.shapes ?? [],
+      pendingFeedback: withFeedback.has(card.id),
     });
   }
   return out;

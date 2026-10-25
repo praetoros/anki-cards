@@ -12,6 +12,7 @@ import { Button } from "@anki-cards/ui/components/button";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { MediaRef, MediaValue } from "~/components/media-ref";
+import { useActionToast } from "~/lib/action-toast";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.history";
@@ -66,6 +67,7 @@ const IDENTITY_FIELDS = new Set(["id", "displayId", "libraryId", "sha256", "stor
 export default function History({ loaderData, actionData }: Route.ComponentProps) {
   const { sets, diff, selectedId, snapshots } = loaderData;
   const [params] = useSearchParams();
+  useActionToast(actionData);
   const busy = useNavigation().state !== "idle";
   const selected = sets.find((s) => s.id === selectedId);
   const last = sets.at(-1);
@@ -117,10 +119,6 @@ export default function History({ loaderData, actionData }: Route.ComponentProps
             </span>
           </div>
           {selected.note && <p className="text-sm text-muted-foreground">{selected.note}</p>}
-          {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
-          {actionData?.message && (
-            <p className="text-sm text-muted-foreground">{actionData.message}</p>
-          )}
           <Form method="post" className="flex flex-wrap gap-2">
             <input type="hidden" name="changesetId" value={selected.id} />
             <input type="hidden" name="seq" value={selected.seq} />

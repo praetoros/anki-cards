@@ -8,6 +8,7 @@ import { Form, useNavigation } from "react-router";
 import { JobStream } from "~/components/job-stream";
 import { JobStatusBadge } from "~/components/jobs-panel";
 import { MediaText } from "~/components/media-ref";
+import { useActionToast } from "~/lib/action-toast";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.chat";
@@ -29,6 +30,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 export default function Chat({ loaderData, actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const form = useRef<HTMLFormElement>(null);
+  useActionToast(actionData);
   const end = useRef<HTMLDivElement>(null);
   const count = loaderData.jobs.length;
 
@@ -80,7 +82,6 @@ export default function Chat({ loaderData, actionData }: Route.ComponentProps) {
           Send
         </Button>
       </Form>
-      {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
     </main>
   );
 }

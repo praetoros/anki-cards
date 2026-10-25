@@ -1,20 +1,19 @@
 import {
   approveGate,
-  cardPlanView,
-  gateStatus,
   getLibrary,
-  latestSnapshot,
-  libraryOutline,
-  listCards,
-  listExports,
-  listReviewItems,
-  listSources,
+  libraryProgress,
+  nextStep,
   pendingEnrichment,
   sendFeedback,
   startEnrichment,
+  startPlanning,
   startSynthesis,
-  unsynthesisedSources,
+  stepStates,
+  type NextStep,
+  type TopicProgress,
 } from "@anki-cards/core";
+// Values used in the component must come from a browser-safe entry, not the server package.
+import { WORKFLOW_STEPS } from "@anki-cards/core/enums";
 import { Badge } from "@anki-cards/ui/components/badge";
 import { Button, buttonVariants } from "@anki-cards/ui/components/button";
 import {
@@ -24,64 +23,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@anki-cards/ui/components/card";
+import { Check, LoaderCircle } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { ConfirmSubmit } from "~/components/confirm-submit";
+import { useActionToast } from "~/lib/action-toast";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.overview";
 
 export async function loader({ params }: Route.LoaderArgs) {
   const { db } = await rt();
-  const libraryId = params.libraryId;
-  const outline = await libraryOutline(db, libraryId);
-  const concepts = outline.flatMap((t) => t.subtopics.flatMap((s) => s.concepts));
-  const review = await listReviewItems(db, libraryId, { statuses: ["open", "awaiting_ai"] });
+  const progress = await libraryProgress(db, params.libraryId);
   return {
-    library: await getLibrary(db, libraryId),
-    sources: await listSources(db, libraryId),
-    pending: await unsynthesisedSources(db, libraryId),
-    counts: {
-      topics: outline.length,
-      concepts: concepts.length,
-      knowledgeItems: concepts.reduce((n, c) => n + c.knowledgeItemCount, 0),
-    },
-    open: review.filter((r) => r.status === "open").length,
-    decisions: review.filter((r) => r.status === "open" && r.category === "requires_decision")
-      .length,
-    awaitingAi: review.filter((r) => r.status === "awaiting_ai").length,
-    synthesisGate: await gateStatus(db, libraryId, "synthesis"),
-    enrichment: (await pendingEnrichment(db, libraryId)).length,
-    topicCards: await Promise.all(
-      outline.map(async (t) => {
-        const plan = await cardPlanView(db, t.id);
-        const cards = await listCards(db, t.id);
-        return {
-          id: t.id,
-          displayId: t.displayId,
-          title: t.title,
-          plan: plan?.plan.status ?? null,
-          planRows: plan?.rows.length ?? 0,
-          cards: cards.filter((c) => c.status !== "retired").length,
-          drafts: cards.filter((c) => c.status === "draft").length,
-          setApprovedAt: (await latestSnapshot(db, libraryId, "card_set", t.id))?.createdAt ?? null,
-        };
-      }),
-    ),
-    lastExport: (await listExports(db, libraryId))[0] ?? null,
+    library: await getLibrary(db, params.libraryId),
+    progress,
+    next: nextStep(progress),
+    states: stepStates(progress),
+    enrichment: (await pendingEnrichment(db, params.libraryId)).length,
   };
-}
-
-type TopicCards = Route.ComponentProps["loaderData"]["topicCards"][number];
-
-function nextCardStep(t: TopicCards, synthesisApproved: boolean) {
-  if (!synthesisApproved) return "Approve the synthesis first";
-  if (!t.plan) return "Plan cards";
-  if (t.plan === "draft") return `Review the plan (${t.planRows} rows)`;
-  if (t.cards === 0) return "Generate cards";
-  if (t.drafts > 0) return `Review ${t.drafts} draft card(s)`;
-  if (!t.setApprovedAt) return "Approve the card set";
-  return "Ready to export";
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -91,22 +51,116 @@ export async function action({ request, params }: Route.ActionArgs) {
     const intent = formString(form, "intent");
     if (intent === "synthesise") {
       await startSynthesis(db, params.libraryId);
-      return { ok: true, message: "Synthesis job queued." };
+      return { ok: true, message: "Synthesis started. Progress shows under AI sessions." };
     }
     if (intent === "send-feedback") {
       const jobs = await sendFeedback(db, params.libraryId);
-      return { ok: true, message: `${jobs.length} feedback job(s) queued.` };
+      return {
+        ok: true,
+        message: `Sent to the AI (${jobs.length} job${jobs.length === 1 ? "" : "s"}).`,
+      };
     }
     if (intent === "enrich") {
       await startEnrichment(db, params.libraryId);
-      return { ok: true, message: "Enrichment job queued." };
+      return { ok: true, message: "Research started." };
+    }
+    if (intent === "plan-all") {
+      const progress = await libraryProgress(db, params.libraryId);
+      const topics = progress.topics.filter((t) => !t.plan && !t.activeJob);
+      for (const t of topics) await startPlanning(db, params.libraryId, t.id);
+      return { ok: true, message: `Planning started for ${topics.length} topics.` };
     }
     if (intent === "approve-synthesis") {
       await approveGate(db, params.libraryId, "synthesis");
-      return { ok: true, message: "Synthesis approved and snapshot created." };
+      return { ok: true, message: "Synthesis approved. You can now plan cards." };
     }
     return { error: "Unknown action" };
   });
+}
+
+type Progress = Route.ComponentProps["loaderData"]["progress"];
+
+function Stepper({ states }: { states: Route.ComponentProps["loaderData"]["states"] }) {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
+      {WORKFLOW_STEPS.map((step, i) => {
+        const state = states[step.id];
+        return (
+          <li key={step.id} className="flex items-center gap-1">
+            {i > 0 && <span className="mx-1 h-px w-4 bg-border" aria-hidden />}
+            <span
+              className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-medium ${
+                state === "done"
+                  ? "bg-rose-gold/20 text-rose-gold"
+                  : state === "current"
+                    ? "bg-rose-gold text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {state === "done" ? <Check className="size-3.5" /> : i + 1}
+            </span>
+            <span
+              className={
+                state === "current"
+                  ? "font-medium text-foreground"
+                  : state === "done"
+                    ? "text-foreground/80"
+                    : "text-muted-foreground"
+              }
+            >
+              {step.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function NextStepCard({ next, progress }: { next: NextStep; progress: Progress }) {
+  const busy = useNavigation().state !== "idle";
+  const action = next.action;
+  const partlyCovered = progress.sources.pending.filter((s) => s.covered > 0);
+  return (
+    <Card className="border-rose-gold/40 bg-linear-to-br from-accent/30 to-transparent">
+      <CardHeader>
+        <CardDescription className="text-xs font-medium tracking-wide text-rose-gold uppercase">
+          {next.done ? "Done" : "Next step"}
+        </CardDescription>
+        <CardTitle className="flex items-center gap-2 text-xl">
+          {!action && <LoaderCircle className="size-5 animate-spin text-rose-gold" />}
+          {next.title}
+        </CardTitle>
+        <CardDescription>{next.detail}</CardDescription>
+      </CardHeader>
+      {action && (
+        <CardContent>
+          {action.kind === "link" ? (
+            <Link to={action.to} className={buttonVariants()}>
+              {action.label}
+            </Link>
+          ) : (
+            <ConfirmSubmit
+              size="default"
+              fields={{ intent: action.intent }}
+              disabled={busy}
+              confirm={
+                action.intent === "synthesise" && partlyCovered.length > 0
+                  ? {
+                      title: "Synthesise sources again?",
+                      description: `${partlyCovered.map((s) => `${s.displayId} (${s.covered}/${s.units} units)`).join(", ")} already ${partlyCovered.length === 1 ? "has" : "have"} knowledge in the library. The AI will re-read them and may change existing knowledge items; the changes can be reverted from History.`,
+                      action: "Synthesise",
+                    }
+                  : null
+              }
+            >
+              {action.label}
+            </ConfirmSubmit>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
@@ -118,54 +172,55 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function topicStatus(t: TopicProgress) {
+  if (t.activeJob === "planning") return "planning…";
+  if (t.activeJob === "generation") return "writing cards…";
+  if (!t.plan) return "not planned";
+  if (t.plan === "draft") return `plan to review (${t.planRows})`;
+  if (t.cards === 0) return "plan approved";
+  if (t.drafts > 0) return `${t.drafts} of ${t.cards} cards to review`;
+  if (!t.setApprovedAt) return `${t.cards} cards approved`;
+  return `${t.cards} cards · set approved`;
+}
+
 export default function Overview({ loaderData, actionData }: Route.ComponentProps) {
-  const d = loaderData;
+  const { progress: p, next, states } = loaderData;
   const busy = useNavigation().state !== "idle";
-  const partlyCovered = d.pending.filter((s) => s.covered > 0);
+  useActionToast(actionData);
+  const synthesisApproved = p.synthesis.approvedAt !== null;
   return (
     <main className="flex flex-col gap-4 p-6">
-      {d.library.description && (
-        <p className="text-sm text-muted-foreground">{d.library.description}</p>
+      {loaderData.library.description && (
+        <p className="text-sm text-muted-foreground">{loaderData.library.description}</p>
       )}
-      {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
-      {actionData?.message && <p className="text-sm text-muted-foreground">{actionData.message}</p>}
+      <Stepper states={states} />
+      <NextStepCard next={next} progress={p} />
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card size="sm">
           <CardHeader>
-            <CardTitle>1. Sources and synthesis</CardTitle>
+            <CardTitle>Sources and knowledge</CardTitle>
             <CardDescription>
-              {d.sources.length} source(s); {d.pending.length} not yet synthesised.
+              {p.sources.total} source{p.sources.total === 1 ? "" : "s"}
+              {p.sources.pending.length > 0 && `, ${p.sources.pending.length} not synthesised`}
+              {p.activeJobs.includes("synthesis") && ", synthesis running"}.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex gap-6">
-              <Stat label="topics" value={d.counts.topics} />
-              <Stat label="concepts" value={d.counts.concepts} />
-              <Stat label="knowledge items" value={d.counts.knowledgeItems} />
+              <Stat label="topics" value={p.knowledge.topics} />
+              <Stat label="concepts" value={p.knowledge.concepts} />
+              <Stat label="knowledge items" value={p.knowledge.knowledgeItems} />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link
-                to="../sources"
-                relative="path"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
+              <Link to="sources" className={buttonVariants({ variant: "outline", size: "sm" })}>
                 Sources
               </Link>
-              <ConfirmSubmit
-                fields={{ intent: "synthesise" }}
-                disabled={busy || d.pending.length === 0}
-                confirm={
-                  partlyCovered.length > 0
-                    ? {
-                        title: "Synthesise sources again?",
-                        description: `${partlyCovered.map((s) => `${s.displayId} (${s.covered}/${s.units} units)`).join(", ")} already ${partlyCovered.length === 1 ? "has" : "have"} knowledge in the library. The AI will re-read these sources and may change existing knowledge items; the changes can be reverted from History.`,
-                        action: "Synthesise",
-                      }
-                    : null
-                }
-              >
-                Synthesise {d.pending.length} source(s)
-              </ConfirmSubmit>
+              {p.knowledge.topics > 0 && (
+                <Link to="knowledge" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                  Knowledge
+                </Link>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -173,39 +228,43 @@ export default function Overview({ loaderData, actionData }: Route.ComponentProp
           <CardHeader>
             <CardTitle>Review</CardTitle>
             <CardDescription>
-              {d.open} open ({d.decisions} need a decision), {d.awaitingAi} waiting for the AI.
+              {p.review.open} open
+              {p.review.decisions > 0 && ` (${p.review.decisions} need a decision)`}
+              {p.review.awaitingAi > 0 && `, ${p.review.awaitingAi} ready for the AI`}
+              {p.review.withAi > 0 && `, ${p.review.withAi} with the AI`}.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Link
-              to="../review"
-              relative="path"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
+            <Link to="review" className={buttonVariants({ variant: "outline", size: "sm" })}>
               Review queue
             </Link>
-            <Form method="post">
-              <Button
-                type="submit"
-                size="sm"
-                name="intent"
-                value="send-feedback"
-                disabled={busy || d.awaitingAi === 0}
-              >
-                Send {d.awaitingAi} item(s) to AI
-              </Button>
-            </Form>
-            {d.enrichment > 0 && (
+            {p.review.awaitingAi > 0 &&
+              !(next.action?.kind === "intent" && next.action.intent === "send-feedback") && (
+                <Form method="post">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="outline"
+                    name="intent"
+                    value="send-feedback"
+                    disabled={busy}
+                  >
+                    Send {p.review.awaitingAi} to the AI
+                  </Button>
+                </Form>
+              )}
+            {loaderData.enrichment > 0 && p.activeJobs.length === 0 && (
               <Form method="post">
                 <Button
                   type="submit"
                   size="sm"
-                  variant="secondary"
+                  variant="outline"
                   name="intent"
                   value="enrich"
                   disabled={busy}
                 >
-                  Research {d.enrichment} approved request(s)
+                  Research {loaderData.enrichment} approved request
+                  {loaderData.enrichment === 1 ? "" : "s"}
                 </Button>
               </Form>
             )}
@@ -214,78 +273,85 @@ export default function Overview({ loaderData, actionData }: Route.ComponentProp
         <Card size="sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              Synthesis gate
-              {d.synthesisGate.snapshot ? (
-                <Badge variant="secondary">approved</Badge>
-              ) : (
-                <Badge variant="outline">not approved</Badge>
-              )}
+              Synthesis approval
+              <Badge variant={synthesisApproved ? "secondary" : "outline"}>
+                {synthesisApproved ? "approved" : "not approved"}
+              </Badge>
             </CardTitle>
             <CardDescription>
-              Approving freezes a snapshot that card planning reads.
-              {d.synthesisGate.snapshot &&
-                ` Last: ${formatDateTime(d.synthesisGate.snapshot.createdAt)}.`}
+              {synthesisApproved
+                ? `Approved ${formatDateTime(p.synthesis.approvedAt!)}. Approve again after changing the knowledge so new plans use it.`
+                : "Fixes this version of the knowledge library; cards are planned from it."}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 text-sm">
-            {d.synthesisGate.blockers.length > 0 && (
+            {p.synthesis.blockers.length > 0 && (
               <ul className="list-disc pl-5 text-xs text-muted-foreground">
-                {d.synthesisGate.blockers.slice(0, 5).map((b) => (
+                {p.synthesis.blockers.slice(0, 5).map((b) => (
                   <li key={b}>{b}</li>
                 ))}
               </ul>
             )}
-            <Form method="post">
-              <Button
-                type="submit"
-                size="sm"
-                name="intent"
-                value="approve-synthesis"
-                disabled={busy || d.synthesisGate.blockers.length > 0 || d.counts.concepts === 0}
-              >
-                Approve synthesis
-              </Button>
-            </Form>
+            {next.action?.kind !== "intent" || next.action.intent !== "approve-synthesis" ? (
+              <Form method="post">
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  name="intent"
+                  value="approve-synthesis"
+                  disabled={busy || p.synthesis.blockers.length > 0 || p.knowledge.concepts === 0}
+                >
+                  {synthesisApproved ? "Approve again" : "Approve synthesis"}
+                </Button>
+              </Form>
+            ) : null}
           </CardContent>
         </Card>
       </div>
+
       <Card size="sm">
         <CardHeader>
-          <CardTitle>2. Cards and export</CardTitle>
+          <CardTitle>Cards by topic</CardTitle>
           <CardDescription>
-            Each topic is planned, generated and approved on its own; export takes every approved
-            card set.
-            {d.lastExport &&
-              ` Last export ${formatDateTime(d.lastExport.createdAt)}: ${d.lastExport.counts.total} card(s).`}
+            Each topic is planned, written and approved on its own. Export takes every approved card
+            set.
+            {p.lastExport &&
+              ` Last export ${formatDateTime(p.lastExport.at)}: ${p.lastExport.total} cards.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-sm">
-          {d.topicCards.map((t) => (
+          {p.topics.map((t) => (
             <div key={t.id} className="flex flex-wrap items-center gap-2 border-t pt-2">
               <span className="font-mono text-xs text-muted-foreground">{t.displayId}</span>
               <span className="min-w-0 flex-1 truncate">{t.title}</span>
-              <span className="text-xs text-muted-foreground">
-                {t.cards} card(s){t.setApprovedAt && " · set approved"}
-              </span>
-              <Link
-                to={`../cards?topic=${t.id}`}
-                relative="path"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
-                {nextCardStep(t, Boolean(d.synthesisGate.snapshot))}
-              </Link>
+              <span className="text-xs text-muted-foreground">{topicStatus(t)}</span>
+              {synthesisApproved && (
+                <Link
+                  to={`cards?topic=${t.id}`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  Open cards
+                </Link>
+              )}
             </div>
           ))}
-          {d.topicCards.length === 0 && (
+          {p.topics.length === 0 && (
             <p className="text-xs text-muted-foreground">Topics appear after synthesis.</p>
           )}
-          <Link
-            to="../export"
-            relative="path"
-            className={`${buttonVariants({ size: "sm" })} self-start`}
-          >
-            Export .apkg
-          </Link>
+          {!synthesisApproved && p.topics.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Cards can be planned once the synthesis is approved.
+            </p>
+          )}
+          {p.topics.some((t) => t.setApprovedAt) && (
+            <Link
+              to="export"
+              className={`${buttonVariants({ variant: "outline", size: "sm" })} self-start`}
+            >
+              Exports
+            </Link>
+          )}
         </CardContent>
       </Card>
     </main>

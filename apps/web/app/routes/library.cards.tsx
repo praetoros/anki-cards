@@ -1,13 +1,16 @@
 import {
   approveGate,
+  DomainError,
   cardPlanView,
   createFeedbackItem,
   EDITABLE_FIELDS,
   gateStatus,
   latestSnapshot,
   libraryOutline,
+  libraryProgress,
   resolveRow,
   scheduleAutoFeedback,
+  sendFeedback,
   setCardStatus,
   setOcclusionMasks,
   startGeneration,
@@ -20,6 +23,7 @@ import {
 import { Badge } from "@anki-cards/ui/components/badge";
 import { Button, buttonVariants } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
+import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
@@ -35,17 +39,37 @@ import type { Route } from "./+types/library.cards";
 export async function loader({ params, request }: Route.LoaderArgs) {
   const { db } = await rt();
   const lib = params.libraryId;
-  const topics = (await libraryOutline(db, lib)).map((t) => ({ id: t.id, title: t.title }));
+  const progress = await libraryProgress(db, lib);
+  const topics = (await libraryOutline(db, lib)).map((t) => {
+    const p = progress.topics.find((x) => x.id === t.id);
+    return {
+      id: t.id,
+      title: t.title,
+      activeJob: p?.activeJob ?? null,
+      setApproved: Boolean(p?.setApprovedAt),
+    };
+  });
   const topicId = new URL(request.url).searchParams.get("topic") ?? topics[0]?.id ?? null;
-  if (!topicId) return { topics, topicId: null, synthesisApproved: false, plan: null, cards: [] };
+  if (!topicId)
+    return {
+      topics,
+      topicId: null,
+      activeJob: null,
+      synthesisApproved: false,
+      plan: null,
+      cards: [],
+      readyForAi: 0,
+    };
   return {
     topics,
     topicId,
+    activeJob: topics.find((t) => t.id === topicId)?.activeJob ?? null,
     synthesisApproved: Boolean(await latestSnapshot(db, lib, "synthesis")),
     plan: await cardPlanView(db, topicId),
     planGate: await gateStatus(db, lib, "card_plan", topicId),
     setGate: await gateStatus(db, lib, "card_set", topicId),
     cards: await cardsWithPreviews(db, topicId),
+    readyForAi: progress.review.awaitingAi,
   };
 }
 
@@ -78,7 +102,11 @@ export async function action({ request, params }: Route.ActionArgs) {
       }
       case "approve-plan":
         await approveGate(db, lib, "card_plan", topicId);
-        return { ok: true, message: "Card plan approved." };
+        // With automatic triggering on, approving has already queued generation.
+        await startGeneration(db, lib, topicId).catch((error: unknown) => {
+          if (!(error instanceof DomainError && error.code === "conflict")) throw error;
+        });
+        return { ok: true, message: "Plan approved. The AI is writing the cards." };
       case "generate":
         await startGeneration(db, lib, topicId);
         return { ok: true, message: "Generation job queued." };
@@ -115,7 +143,14 @@ export async function action({ request, params }: Route.ActionArgs) {
           topicId: card.topicId,
         });
         await scheduleAutoFeedback(db, lib);
-        return { ok: true, message: "Feedback recorded." };
+        return { ok: true, message: "Feedback saved. Send it to the AI when you are ready." };
+      }
+      case "send-feedback": {
+        const jobs = await sendFeedback(db, lib);
+        return {
+          ok: true,
+          message: `Sent to the AI (${jobs.length} job${jobs.length === 1 ? "" : "s"}).`,
+        };
       }
       case "save-masks":
         await setOcclusionMasks(db, w, {
@@ -180,6 +215,11 @@ function CardItem({ entry }: { entry: CardEntry }) {
         <Badge variant="outline">{card.cardType.replace("_", " ")}</Badge>
         <Badge variant={card.status === "approved" ? "secondary" : "outline"}>{card.status}</Badge>
         {card.warning && <Badge variant="destructive">uncertain</Badge>}
+        {entry.pendingFeedback && (
+          <Link to={`../review?status=active`} relative="path">
+            <Badge variant="default">feedback pending</Badge>
+          </Link>
+        )}
         <span className="ml-auto flex flex-wrap gap-1">
           {(["view", "edit", "feedback"] as const).map((m) => (
             <Button
@@ -215,7 +255,7 @@ function CardItem({ entry }: { entry: CardEntry }) {
           </Form>
         </span>
       </div>
-      {mode === "view" && preview && (
+      {(mode === "view" || mode === "feedback") && preview && (
         <div className="flex flex-col gap-1">
           {previews.length > 1 && (
             <div className="flex gap-1">
@@ -279,10 +319,21 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
   const d = loaderData;
   const busy = useNavigation().state !== "idle";
   useActionToast(actionData);
+  const [show, setShow] = useState<"review" | "approved" | "all">(() =>
+    d.cards.some((c) => c.card.status === "draft") ? "review" : "all",
+  );
   if (!d.topicId) {
     return <main className="p-6 text-sm text-muted-foreground">No topics yet.</main>;
   }
   const drafts = d.cards.filter((c) => c.card.status === "draft");
+  const approvable = drafts.filter((c) => !c.pendingFeedback);
+  const shown = d.cards.filter((c) =>
+    show === "review"
+      ? c.card.status === "draft"
+      : show === "approved"
+        ? c.card.status === "approved"
+        : true,
+  );
   const setApproved = Boolean(d.setGate?.snapshot) && d.setGate?.blockers.length === 0;
   return (
     <main className="flex flex-col gap-4 p-4">
@@ -294,9 +345,21 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
             className={`rounded-md px-2 py-1 text-sm ${t.id === d.topicId ? "bg-muted font-medium" : "text-muted-foreground"}`}
           >
             {t.title}
+            {t.activeJob && <LoaderCircle className="ml-1 inline size-3 animate-spin" />}
+            {!t.activeJob && t.setApproved && (
+              <Check className="ml-1 inline size-3 text-rose-gold" />
+            )}
           </Link>
         ))}
       </nav>
+      {d.activeJob && (
+        <p className="flex items-center gap-2 rounded-md border border-rose-gold/40 bg-accent/20 p-2 text-sm">
+          <LoaderCircle className="size-4 animate-spin text-rose-gold" />
+          {d.activeJob === "planning"
+            ? "The AI is planning the cards for this topic. The plan appears here when it is ready."
+            : "The AI is writing the cards. They appear below as they are written."}
+        </p>
+      )}
       <section className="flex flex-col gap-2 rounded-lg border p-3">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="font-semibold">Card plan</h2>
@@ -313,7 +376,7 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
               variant="outline"
               name="intent"
               value="plan"
-              disabled={busy || !d.synthesisApproved}
+              disabled={busy || !d.synthesisApproved || Boolean(d.activeJob)}
             >
               {d.plan ? "Re-plan" : "Plan cards"}
             </Button>
@@ -331,13 +394,32 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
                 </Button>
               )}
             {d.plan?.plan.status === "draft" && (
-              <Button type="submit" size="sm" name="intent" value="approve-plan" disabled={busy}>
-                Approve plan
+              <Button
+                type="submit"
+                size="sm"
+                name="intent"
+                value="approve-plan"
+                disabled={busy}
+                title="Rows you have not rejected are written as cards."
+              >
+                Approve plan and write cards
               </Button>
             )}
-            {d.plan?.plan.status === "approved" && (
-              <Button type="submit" size="sm" name="intent" value="generate" disabled={busy}>
-                Generate cards
+            {d.plan?.plan.status === "approved" && !d.activeJob && (
+              <Button
+                type="submit"
+                size="sm"
+                variant={d.cards.length > 0 ? "outline" : "default"}
+                name="intent"
+                value="generate"
+                disabled={busy}
+                title={
+                  d.cards.length > 0
+                    ? "The AI writes cards for rows that have none yet and updates the rest."
+                    : undefined
+                }
+              >
+                {d.cards.length > 0 ? "Generate again" : "Generate cards"}
               </Button>
             )}
           </Form>
@@ -348,6 +430,11 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
           </p>
         )}
         {d.plan?.plan.summary && <p className="text-sm">{d.plan.plan.summary}</p>}
+        {d.plan?.plan.status === "draft" && (
+          <p className="text-xs text-muted-foreground">
+            Reject the rows you don't want; every other row becomes a card when you approve.
+          </p>
+        )}
         {d.plan && d.plan.rows.length > 0 && (
           <details open={d.plan.plan.status === "draft"} className="group">
             <summary className="cursor-pointer text-sm text-muted-foreground">
@@ -400,10 +487,10 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
           )}
           <Form method="post" className="ml-auto flex gap-2">
             <input type="hidden" name="topicId" value={d.topicId} />
-            {drafts.map((c) => (
+            {approvable.map((c) => (
               <input key={c.card.id} type="hidden" name="cardIds" value={c.card.id} />
             ))}
-            {drafts.length > 0 && (
+            {approvable.length > 0 && (
               <Button
                 type="submit"
                 size="sm"
@@ -411,29 +498,86 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
                 name="intent"
                 value="approve-all"
                 disabled={busy}
+                title={
+                  approvable.length < drafts.length
+                    ? "Cards with feedback pending stay drafts until the AI has updated them."
+                    : undefined
+                }
               >
-                Approve {drafts.length} draft(s)
+                Approve {approvable.length} draft{approvable.length === 1 ? "" : "s"}
               </Button>
             )}
             <Button
               type="submit"
               size="sm"
+              variant={setApproved ? "outline" : "default"}
               name="intent"
               value="approve-set"
               disabled={busy || d.cards.length === 0 || (d.setGate?.blockers.length ?? 0) > 0}
+              title={
+                setApproved
+                  ? "Approve again after changing cards so the export uses them."
+                  : undefined
+              }
             >
-              Approve card set
+              {setApproved ? "Approve again" : "Approve card set"}
             </Button>
           </Form>
         </div>
         {d.setGate && d.setGate.blockers.length > 0 && d.cards.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {d.setGate.blockers.slice(0, 3).join("; ")}
-          </p>
+          <ul className="list-disc pl-5 text-xs text-muted-foreground">
+            {d.setGate.blockers.slice(0, 3).map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
         )}
-        {d.cards.map((entry) => (
+        {d.readyForAi > 0 && (
+          <Form
+            method="post"
+            className="flex flex-wrap items-center gap-2 rounded-md border border-rose-gold/40 bg-accent/20 p-2 text-sm"
+          >
+            <span className="flex-1">
+              {d.readyForAi === 1
+                ? "1 piece of feedback is"
+                : `${d.readyForAi} pieces of feedback are`}{" "}
+              ready for the AI. Send them when you have finished reviewing.
+            </span>
+            <Button type="submit" size="sm" name="intent" value="send-feedback" disabled={busy}>
+              Send to the AI
+            </Button>
+          </Form>
+        )}
+        {d.cards.length > 0 && (
+          <nav className="flex gap-1 text-xs">
+            {(
+              [
+                ["review", `To review (${drafts.length})`],
+                [
+                  "approved",
+                  `Approved (${d.cards.filter((c) => c.card.status === "approved").length})`,
+                ],
+                ["all", `All (${d.cards.length})`],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setShow(value)}
+                className={`rounded-md px-2 py-1 ${show === value ? "bg-muted font-medium" : "text-muted-foreground"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
+        {shown.map((entry) => (
           <CardItem key={entry.card.id} entry={entry} />
         ))}
+        {d.cards.length > 0 && shown.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            {show === "review" ? "Every card is approved." : "No cards here."}
+          </p>
+        )}
       </section>
     </main>
   );
