@@ -1,3 +1,4 @@
+import type { OcclusionMask } from "@anki-cards/apkg/preview";
 import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import type { CardStatus, CardType, PlanRowStatus } from "../../domain/enums.ts";
@@ -47,16 +48,7 @@ export const tCard = sqliteTable(
   (t) => [index("cards_topic_idx").on(t.topicId)],
 );
 
-export interface OcclusionShape {
-  shape: "rect" | "ellipse" | "polygon";
-  left?: number;
-  top?: number;
-  width?: number;
-  height?: number;
-  points?: [number, number][];
-  label?: string;
-  ordinal: number;
-}
+export type OcclusionShape = OcclusionMask & { label?: string };
 
 export const tOcclusionMask = sqliteTable(
   "occlusion_masks",

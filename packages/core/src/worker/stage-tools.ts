@@ -33,8 +33,16 @@ export const TOOL_GROUPS = {
     "delete_item",
   ],
   enrichment: ["add_external_evidence", "propose_external_media", "list_trusted_sources"],
-  planning: ["propose_card_plan", "update_card_plan_row"],
-  generation: ["upsert_card", "propose_occlusion_masks", "retire_card", "get_card"],
+  planning: ["propose_card_plan", "update_card_plan_row", "get_card_plan", "list_cards"],
+  generation: [
+    "upsert_card",
+    "propose_occlusion_masks",
+    "suggest_occlusion_masks",
+    "retire_card",
+    "get_card",
+    "get_card_plan",
+    "list_cards",
+  ],
 } as const;
 
 type Group = keyof typeof TOOL_GROUPS;

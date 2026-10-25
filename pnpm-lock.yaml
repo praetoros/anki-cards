@@ -164,6 +164,9 @@ settings:
 
 catalogs:
   default:
+    '@anki-cards/apkg':
+      specifier: workspace:*
+      version: workspace:*
     '@anki-cards/core':
       specifier: workspace:*
       version: workspace:*
@@ -384,6 +387,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@anki-cards/apkg':
+        specifier: 'catalog:'
+        version: link:../apkg
       '@anki-cards/ingest':
         specifier: 'catalog:'
         version: link:../ingest
@@ -450,6 +456,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5
+      fflate:
+        specifier: 'catalog:'
+        version: 0.8.3
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

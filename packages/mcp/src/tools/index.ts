@@ -1,5 +1,6 @@
 import type { ToolDef } from "../tool.ts";
 import { completeJob, getSettings, getWorkflowState, ping, saveSessionSummary } from "./common.ts";
+import * as cards from "./cards.ts";
 import * as enrichment from "./enrichment.ts";
 import * as knowledge from "./knowledge.ts";
 import * as review from "./review.ts";
@@ -15,4 +16,5 @@ export const allTools = [
   ...Object.values(knowledge),
   ...Object.values(review),
   ...Object.values(enrichment),
+  ...Object.values(cards),
 ] as ToolDef[];
