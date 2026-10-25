@@ -1,9 +1,11 @@
 {
-  "compilerOptions": {
-    "noEmit": true,
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "allowImportingTsExtensions": true,
-    "esModuleInterop": true
-  }
+  "files": [],
+  "references": [
+    { "path": "./apps/web" },
+    { "path": "./packages/core" },
+    { "path": "./packages/mcp" },
+    { "path": "./packages/ingest" },
+    { "path": "./packages/apkg" },
+    { "path": "./packages/ui" }
+  ]
 }

@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "ready": "vp check && vp run -r test && vp run -r build",
-    "dev": "vp run website#dev",
+    "ready": "vp run @anki-cards/web#typegen && vp check && vp run -r test && vp run @anki-cards/web#build",
+    "dev": "vp run @anki-cards/web#dev",
+    "build": "vp run @anki-cards/web#build",
+    "start": "vp run @anki-cards/web#build && vp run @anki-cards/web#start",
+    "test": "vp run -r test",
     "prepare": "vp config"
   },
   "devDependencies": {
@@ -16,9 +19,14 @@
       "name": "pnpm",
       "version": "12.15.0",
       "onFail": "download"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "26.12.1",
+      "onFail": "download"
     }
   },
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=26.12.1"
   }
 }

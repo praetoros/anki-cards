@@ -1,0 +1,21 @@
+{
+  "name": "@anki-cards/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vp test --passWithNoTests"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "drizzle-kit": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
