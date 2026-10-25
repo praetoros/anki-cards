@@ -3,10 +3,13 @@ import { TooltipProvider } from "@anki-cards/ui/components/tooltip";
 import { Layers, Settings } from "lucide-react";
 import { NavLink, Outlet } from "react-router";
 
+import { useLiveUpdates } from "~/lib/live";
+
 const navClass = ({ isActive }: { isActive: boolean }) =>
   `inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm ${isActive ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"}`;
 
 export default function Layout() {
+  useLiveUpdates();
   return (
     <TooltipProvider>
       <div className="flex min-h-svh flex-col">

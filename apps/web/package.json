@@ -16,6 +16,7 @@
     "@anki-cards/mcp": "catalog:",
     "@anki-cards/ui": "catalog:",
     "@react-router/node": "catalog:",
+    "@shadcn/react": "catalog:",
     "cn": "catalog:",
     "isbot": "catalog:",
     "lucide-react": "catalog:",
@@ -23,6 +24,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "catalog:",
+    "shiki": "catalog:",
     "sonner": "catalog:"
   },
   "devDependencies": {
