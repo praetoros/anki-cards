@@ -55,6 +55,8 @@ export const LIBRARY_TABS = [
   { to: "knowledge", label: "Knowledge" },
   { to: "objectives", label: "Objectives" },
   { to: "review", label: "Review" },
+  { to: "cards", label: "Cards" },
+  { to: "export", label: "Export" },
   { to: "history", label: "History" },
   { to: "settings", label: "Settings" },
 ];

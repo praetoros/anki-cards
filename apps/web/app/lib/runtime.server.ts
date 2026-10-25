@@ -12,9 +12,9 @@ export interface ActionResult {
 }
 
 /** Runs an action body and turns expected domain failures into a 400 with a readable message. */
-export async function handle<T extends ActionResult>(fn: () => Promise<T>) {
+export async function handle<T extends object>(fn: () => Promise<T>) {
   try {
-    return await fn();
+    return (await fn()) as T & ActionResult;
   } catch (error) {
     if (error instanceof DomainError)
       return data<ActionResult>({ error: error.message }, { status: 400 });

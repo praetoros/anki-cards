@@ -5,6 +5,7 @@ export default [
   route("events", "routes/events.ts"),
   route("api/jobs/:jobId", "routes/api.jobs.$jobId.ts"),
   route("media/:mediaId", "routes/media.$mediaId.ts"),
+  route("exports/:exportId", "routes/exports.$exportId.ts"),
   route("api/sessions/:sessionId", "routes/api.sessions.$sessionId.ts"),
   layout("routes/layout.tsx", [
     index("routes/home.tsx"),
@@ -16,6 +17,8 @@ export default [
       route("knowledge", "routes/library.knowledge.tsx"),
       route("objectives", "routes/library.objectives.tsx"),
       route("review", "routes/library.review.tsx"),
+      route("cards", "routes/library.cards.tsx"),
+      route("export", "routes/library.export.tsx"),
       route("history", "routes/library.history.tsx"),
       route("settings", "routes/library.settings.tsx"),
     ]),

@@ -292,6 +292,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@anki-cards/apkg':
+        specifier: 'catalog:'
+        version: link:../../packages/apkg
       '@anki-cards/core':
         specifier: 'catalog:'
         version: link:../../packages/core

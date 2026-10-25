@@ -12,6 +12,7 @@
     "typegen": "react-router typegen"
   },
   "dependencies": {
+    "@anki-cards/apkg": "catalog:",
     "@anki-cards/core": "catalog:",
     "@anki-cards/mcp": "catalog:",
     "@anki-cards/ui": "catalog:",

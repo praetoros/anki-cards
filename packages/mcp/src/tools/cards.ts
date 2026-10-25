@@ -182,10 +182,16 @@ export const retireCard = defineTool({
 export const suggestOcclusionMasks = defineTool({
   name: "suggest_occlusion_masks",
   description:
-    "Exact mask rectangles for labels printed as text inside a PDF figure (empty when the labels are part of the image). Pick the ones to hide and pass them to propose_occlusion_masks.",
+    "Exact mask rectangles for labels printed as PDF text on or beside a figure. Returns the mediaId to use for the card (a crop that includes the labels when they sit outside the image) and the shapes; empty shapes when the labels are part of the image.",
   input: z.object({ mediaId: z.string() }),
   readOnly: true,
-  run: ({ mediaId }, ctx) => suggestMasksFromText(ctx.runtime.db, ctx.libraryId, mediaId),
+  run: ({ mediaId }, ctx) =>
+    suggestMasksFromText(
+      ctx.runtime.db,
+      ctx.runtime.paths,
+      { ...ctx.change("suggest_occlusion_masks"), libraryId: ctx.libraryId },
+      mediaId,
+    ),
 });
 
 export const proposeOcclusionMasks = defineTool({

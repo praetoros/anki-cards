@@ -14,3 +14,4 @@ export type {
   TextBlock,
   UnitType,
 } from "./types.ts";
+export { renderPdfRegion } from "./region.ts";

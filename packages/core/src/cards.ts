@@ -1,4 +1,10 @@
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { guidFor, noteTypes, occlusionsToCloze, type NoteTypeDef } from "@anki-cards/apkg/preview";
+import { renderPdfRegion } from "@anki-cards/ingest";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { TDatabase, TDb } from "./db/client.ts";
@@ -22,7 +28,8 @@ import {
 import { nextDisplayId } from "./display-ids.ts";
 import type { CardType, PlanRowStatus } from "./domain/enums.ts";
 import { DomainError } from "./errors.ts";
-import { change } from "./history.ts";
+import { change, type ChangeContext } from "./history.ts";
+import type { AppPaths } from "./paths.ts";
 import type { Writer } from "./knowledge.ts";
 import { enqueueJob } from "./jobs.ts";
 import { resolveIds, resolveRow } from "./resolve.ts";
@@ -311,46 +318,101 @@ export async function setOcclusionMasks(
 }
 
 /**
- * Mask suggestions from text printed on or next to an image: each text line inside the image's
- * placement on the page becomes a rect, in fractions of the image.
+ * Mask suggestions from labels printed as PDF text on or beside a figure. When labels sit
+ * outside the image, a crop of the page covering the figure and its labels becomes the image.
+ * Returns the media to use and rects in fractions of it.
  */
 export async function suggestMasksFromText(
-  db: TDb,
-  libraryId: string,
+  db: TDatabase,
+  paths: AppPaths,
+  ctx: ChangeContext & { libraryId: string },
   mediaId: string,
-): Promise<OcclusionShape[]> {
+): Promise<{ mediaId: string; shapes: OcclusionShape[] }> {
+  const libraryId = ctx.libraryId;
   const media = await resolveRow(db, "media_assets", libraryId, mediaId);
   const bbox = media.provenance.bbox;
   const page = media.provenance.detail?.["page"];
-  if (!bbox || !media.sourceId) return [];
+  const none = { mediaId: media.id, shapes: [] };
+  if (!bbox || !media.sourceId || typeof page !== "number") return none;
+  const [source] = await db.select().from(tSource).where(eq(tSource.id, media.sourceId));
   const units = await db
     .select()
     .from(tSourceUnit)
     .where(and(eq(tSourceUnit.sourceId, media.sourceId), eq(tSourceUnit.unitType, "page")));
-  const unit =
-    units.find((u) => u.location.page === page) ?? units.find((u) => u.mediaIds.includes(media.id));
-  if (!unit) return [];
-  const width = bbox.x1 - bbox.x0;
-  const height = bbox.y1 - bbox.y0;
-  const shapes: OcclusionShape[] = [];
-  let ordinal = 1;
-  for (const block of unit.textBlocks) {
+  const unit = units.find((u) => u.location.page === page);
+  if (!unit || !source) return none;
+  const labels = unit.textBlocks.filter((block) => {
     const b = block.bbox;
-    const inside =
-      b.x0 >= bbox.x0 - 2 && b.x1 <= bbox.x1 + 2 && b.y0 >= bbox.y0 - 2 && b.y1 <= bbox.y1 + 2;
-    if (!inside || !block.text.trim()) continue;
-    const clamp = (v: number) => Math.min(1, Math.max(0, v));
-    shapes.push({
-      shape: "rect",
-      left: clamp((b.x0 - bbox.x0) / width),
-      top: clamp((b.y0 - bbox.y0) / height),
-      width: clamp((b.x1 - b.x0) / width),
-      height: clamp((b.y1 - b.y0) / height),
-      ordinal: ordinal++,
-      label: block.text.trim(),
+    const text = block.text.trim();
+    if (!text || text.length > 60 || /^(fig(ure)?|table)\.?\s*\d/i.test(text)) return false;
+    const vertical = b.y1 >= bbox.y0 - 30 && b.y0 <= bbox.y1 + 30;
+    const horizontal = b.x1 >= bbox.x0 - 160 && b.x0 <= bbox.x1 + 160;
+    return vertical && horizontal;
+  });
+  if (labels.length === 0) return none;
+  const pad = 6;
+  const region = {
+    x0: Math.min(bbox.x0, ...labels.map((l) => l.bbox.x0)) - pad,
+    y0: Math.min(bbox.y0, ...labels.map((l) => l.bbox.y0)) - pad,
+    x1: Math.max(bbox.x1, ...labels.map((l) => l.bbox.x1)) + pad,
+    y1: Math.max(bbox.y1, ...labels.map((l) => l.bbox.y1)) + pad,
+  };
+  const outside =
+    region.x0 < bbox.x0 - pad ||
+    region.y0 < bbox.y0 - pad ||
+    region.x1 > bbox.x1 + pad ||
+    region.y1 > bbox.y1 + pad;
+  const frame = outside ? region : bbox;
+  let target = media.id;
+  if (outside && source.fileType === "pdf") {
+    const { png, width, height } = renderPdfRegion(
+      new Uint8Array(await readFile(source.storagePath)),
+      page,
+      region,
+    );
+    const sha = createHash("sha256").update(png).digest("hex");
+    const storagePath = join(paths.media, `${sha}.png`);
+    if (!existsSync(storagePath)) await writeFile(storagePath, png);
+    const { result } = await change(db, { ...ctx, action: "crop_figure" }, async (c) => {
+      const [existing] = await c.tx
+        .select()
+        .from(tMediaAsset)
+        .where(and(eq(tMediaAsset.libraryId, libraryId), eq(tMediaAsset.sha256, sha)));
+      if (existing) return existing;
+      return c.insert("media_assets", {
+        displayId: await nextDisplayId(c.tx, libraryId, "media_assets"),
+        sha256: sha,
+        storagePath,
+        mime: "image/png",
+        width,
+        height,
+        origin: "source",
+        sourceId: source.id,
+        provenance: {
+          kind: "render",
+          bbox: region,
+          renderDpi: 200,
+          detail: { page, croppedFrom: media.id },
+        },
+        relevance: "essential",
+        description: `Figure with its labels, page ${page}`,
+      });
     });
+    target = result.id;
   }
-  return shapes;
+  const w = frame.x1 - frame.x0;
+  const h = frame.y1 - frame.y0;
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  const shapes: OcclusionShape[] = labels.map((l, i) => ({
+    shape: "rect",
+    left: clamp((l.bbox.x0 - frame.x0) / w),
+    top: clamp((l.bbox.y0 - frame.y0) / h),
+    width: clamp((l.bbox.x1 - l.bbox.x0) / w),
+    height: clamp((l.bbox.y1 - l.bbox.y0) / h),
+    ordinal: i + 1,
+    label: l.text.trim(),
+  }));
+  return { mediaId: target, shapes };
 }
 
 export async function listCards(db: TDb, topicId: string) {

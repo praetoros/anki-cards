@@ -124,6 +124,12 @@ describe("synthesis and the review loop", () => {
     const [item] = await listReviewItems(db, h.libraryId, { statuses: ["resolved"] });
     expect(item?.displayId).toBe("R-001");
 
+    const [untrusted] = await listReviewItems(db, h.libraryId, { kinds: ["untrusted_source"] });
+    expect(untrusted?.status).toBe("open");
+    await expect(approveGate(db, h.libraryId, "synthesis")).rejects.toThrow(
+      "not on the trusted list",
+    );
+    await actOnReviewItem(db, h.libraryId, untrusted!.id, { action: "approve" });
     const snapshot = await approveGate(db, h.libraryId, "synthesis");
     expect(snapshot.changesetSeq).toBeGreaterThan(0);
   });
