@@ -6,6 +6,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@anki-cards/ui/com
 import { useState } from "react";
 import { useFetcher } from "react-router";
 
+import { formatTime } from "~/lib/format";
+
 import { JobStream } from "./job-stream";
 
 const CONTEXT_WINDOW: Record<string, number> = { claude: 200_000, codex: 272_000 };
@@ -37,9 +39,7 @@ function JobRow({ job, onOpen }: { job: TJobS; onOpen: () => void }) {
         <JobStatusBadge status={job.status} />
         <span className="truncate">{job.kind}</span>
         {job.resumeAfter && job.status === "waiting" && (
-          <span className="text-xs text-muted-foreground">
-            until {new Date(job.resumeAfter).toLocaleTimeString()}
-          </span>
+          <span className="text-xs text-muted-foreground">until {formatTime(job.resumeAfter)}</span>
         )}
       </button>
       {active && (

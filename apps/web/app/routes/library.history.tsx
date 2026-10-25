@@ -11,6 +11,7 @@ import { Badge } from "@anki-cards/ui/components/badge";
 import { Button } from "@anki-cards/ui/components/button";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
+import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.history";
 
@@ -113,7 +114,7 @@ export default function History({ loaderData, actionData }: Route.ComponentProps
               #{selected.seq} {selected.action.replaceAll("_", " ")}
             </h2>
             <span className="text-xs text-muted-foreground">
-              {new Date(selected.createdAt).toLocaleString()} by {selected.actor}
+              {formatDateTime(selected.createdAt)} by {selected.actor}
               {selected.jobKind && ` (${selected.jobKind} job)`}
             </span>
           </div>

@@ -7,6 +7,7 @@ import { Form, useNavigation } from "react-router";
 
 import { JobStream } from "~/components/job-stream";
 import { JobStatusBadge } from "~/components/jobs-panel";
+import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.chat";
 
@@ -54,7 +55,7 @@ export default function Chat({ loaderData, actionData }: Route.ComponentProps) {
             </Bubble>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <JobStatusBadge status={job.status} />
-              {new Date(job.createdAt).toLocaleString()}
+              {formatDateTime(job.createdAt)}
             </div>
             <div className="rounded-lg border p-2">
               <JobStream jobId={job.id} />

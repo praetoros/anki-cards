@@ -3,13 +3,13 @@ import {
   conceptDetail,
   createFeedbackItem,
   libraryOutline,
-  PRIORITIES,
   resolveRow,
   scheduleAutoFeedback,
   topicOf,
   upsertKnowledgeItem,
-  type Priority,
 } from "@anki-cards/core";
+// Values used in the component must come from a browser-safe entry, not the server package.
+import { PRIORITIES, type Priority } from "@anki-cards/core/enums";
 import { Badge } from "@anki-cards/ui/components/badge";
 import { Button } from "@anki-cards/ui/components/button";
 import { Input } from "@anki-cards/ui/components/input";

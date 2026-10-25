@@ -10,6 +10,7 @@ import {
 } from "@anki-cards/ui/components/table";
 import { Form, useNavigation } from "react-router";
 
+import { formatDateTime } from "~/lib/format";
 import { handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.export";
 
@@ -61,7 +62,7 @@ export default function Export({ loaderData, actionData }: Route.ComponentProps)
         <TableBody>
           {loaderData.exports.map((e) => (
             <TableRow key={e.id}>
-              <TableCell>{new Date(e.createdAt).toLocaleString()}</TableCell>
+              <TableCell>{formatDateTime(e.createdAt)}</TableCell>
               <TableCell>{e.counts.added}</TableCell>
               <TableCell>{e.counts.changed}</TableCell>
               <TableCell>{e.counts.unchanged}</TableCell>

@@ -22,6 +22,7 @@ import {
 } from "@anki-cards/ui/components/card";
 import { Form, Link, useNavigation } from "react-router";
 
+import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.overview";
 
@@ -184,7 +185,7 @@ export default function Overview({ loaderData, actionData }: Route.ComponentProp
             <CardDescription>
               Approving freezes a snapshot that card planning reads.
               {d.synthesisGate.snapshot &&
-                ` Last: ${new Date(d.synthesisGate.snapshot.createdAt).toLocaleString()}.`}
+                ` Last: ${formatDateTime(d.synthesisGate.snapshot.createdAt)}.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 text-sm">

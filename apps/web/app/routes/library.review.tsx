@@ -13,6 +13,7 @@ import { Button } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
+import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import { describeTargets } from "~/lib/targets.server";
 import type { Route } from "./+types/library.review";
@@ -193,7 +194,7 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
               >
                 <span className="mb-1 block text-xs text-muted-foreground">
                   {m.author === "ai" ? "AI" : "You"}
-                  {m.action ? ` · ${m.action}` : ""} · {new Date(m.createdAt).toLocaleString()}
+                  {m.action ? ` · ${m.action}` : ""} · {formatDateTime(m.createdAt)}
                 </span>
                 {m.body || <em className="text-muted-foreground">(no message)</em>}
               </div>

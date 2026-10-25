@@ -1,6 +1,8 @@
 import { Button } from "@anki-cards/ui/components/button";
 import { useFetcher } from "react-router";
 
+import { formatDateTime } from "~/lib/format";
+
 export interface BackupView {
   id: string;
   path: string;
@@ -31,7 +33,7 @@ export function BackupPanel({ backups }: { backups: BackupView[] }) {
       <ul className="text-xs">
         {backups.slice(0, 10).map((b) => (
           <li key={b.id}>
-            {new Date(b.createdAt).toLocaleString()} · {b.reason} ·{" "}
+            {formatDateTime(b.createdAt)} · {b.reason} ·{" "}
             <code className="text-muted-foreground">{b.path}</code>
           </li>
         ))}
