@@ -1,5 +1,6 @@
 import {
   backupNow,
+  getRunner,
   listBackups,
   providerStatuses,
   type ProviderId,
@@ -51,7 +52,9 @@ export async function action({ request }: Route.ActionArgs) {
       return { ok: true, message: `Backed up to ${backup?.path ?? ""}` };
     }
     if (intent === "check-providers") {
-      await checkAllProviders(db);
+      for (const result of await checkAllProviders(db)) {
+        if (result.ok) await getRunner()?.resumePaused(result.provider);
+      }
       return { ok: true, message: "Checked" };
     }
     if (intent === "test-provider") {

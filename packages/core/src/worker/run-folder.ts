@@ -16,7 +16,7 @@ const KIND_SKILLS: Record<JobKind, string[]> = {
   planning: ["anki-cards"],
   generation: ["anki-cards"],
   card_review: ["anki-cards", "anki-feedback"],
-  chat: ["anki-synthesis", "anki-feedback", "anki-enrichment", "anki-cards"],
+  chat: ["anki-chat", "anki-synthesis", "anki-feedback", "anki-enrichment", "anki-cards"],
   compact: [],
 };
 

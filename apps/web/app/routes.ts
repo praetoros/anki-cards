@@ -18,6 +18,7 @@ export default [
       route("objectives", "routes/library.objectives.tsx"),
       route("review", "routes/library.review.tsx"),
       route("cards", "routes/library.cards.tsx"),
+      route("chat", "routes/library.chat.tsx"),
       route("export", "routes/library.export.tsx"),
       route("history", "routes/library.history.tsx"),
       route("settings", "routes/library.settings.tsx"),

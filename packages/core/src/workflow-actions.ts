@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 
 import type { TDatabase, TDb } from "./db/client.ts";
 import {
@@ -214,4 +214,46 @@ export async function scheduleAutoFeedback(db: TDatabase, libraryId: string) {
       void sendFeedback(db, libraryId, undefined, "auto").catch(() => undefined);
     }, delay),
   );
+}
+
+/** A chat message becomes a job in the library's chat session, with the same tools and rules. */
+export async function sendChatMessage(
+  db: TDatabase,
+  libraryId: string,
+  text: string,
+  context?: string,
+) {
+  const message = text.trim();
+  if (!message) throw new DomainError("invalid", "Write a message.");
+  const session = await ensureSession(db, {
+    libraryId,
+    kind: "chat",
+    scope: { kind: "library", topicIds: [] },
+    title: "Library chat",
+    jobKind: "chat",
+  });
+  const prompt = context ? `${message}\n\n(The user is looking at: ${context})` : message;
+  return enqueueJob(db, { sessionId: session.id, kind: "chat", trigger: "chat", prompt });
+}
+
+export async function chatHistory(db: TDb, libraryId: string, limit = 30) {
+  const sessions = await db
+    .select()
+    .from(tSession)
+    .where(and(eq(tSession.libraryId, libraryId), eq(tSession.kind, "chat")));
+  if (sessions.length === 0) return [];
+  return db
+    .select()
+    .from(tJob)
+    .where(
+      and(
+        inArray(
+          tJob.sessionId,
+          sessions.map((s) => s.id),
+        ),
+        eq(tJob.kind, "chat"),
+      ),
+    )
+    .orderBy(asc(tJob.createdAt))
+    .limit(limit);
 }

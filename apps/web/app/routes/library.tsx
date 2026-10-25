@@ -57,6 +57,7 @@ export const LIBRARY_TABS = [
   { to: "review", label: "Review" },
   { to: "cards", label: "Cards" },
   { to: "export", label: "Export" },
+  { to: "chat", label: "Chat" },
   { to: "history", label: "History" },
   { to: "settings", label: "Settings" },
 ];
