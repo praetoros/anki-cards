@@ -11,6 +11,7 @@ import { Badge } from "@anki-cards/ui/components/badge";
 import { Button } from "@anki-cards/ui/components/button";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
+import { MediaRef, MediaValue } from "~/components/media-ref";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.history";
@@ -59,11 +60,8 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 }
 
-function show(value: unknown) {
-  if (value === undefined || value === null) return "—";
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
-}
+/** A row's own ids; the row header already shows the image. */
+const IDENTITY_FIELDS = new Set(["id", "displayId", "libraryId", "sha256", "storagePath"]);
 
 export default function History({ loaderData, actionData }: Route.ComponentProps) {
   const { sets, diff, selectedId, snapshots } = loaderData;
@@ -170,6 +168,9 @@ export default function History({ loaderData, actionData }: Route.ComponentProps
                   <Badge variant="outline">{row.op}</Badge>
                   <span>{row.table.replaceAll("_", " ")}</span>
                   <span className="font-mono">{row.displayId ?? row.rowId}</span>
+                  {row.table === "media_assets" && row.op !== "delete" && (
+                    <MediaRef id={row.rowId} />
+                  )}
                   <span className="text-muted-foreground">v{row.version}</span>
                 </div>
                 <table className="mt-1 w-full text-xs">
@@ -177,8 +178,12 @@ export default function History({ loaderData, actionData }: Route.ComponentProps
                     {row.changes.map((c) => (
                       <tr key={c.field} className="align-top">
                         <td className="w-32 pr-2 text-muted-foreground">{c.field}</td>
-                        <td className="pr-2 text-destructive line-through">{show(c.before)}</td>
-                        <td>{show(c.after)}</td>
+                        <td className="pr-2 text-destructive line-through">
+                          <MediaValue value={c.before} plain={IDENTITY_FIELDS.has(c.field)} />
+                        </td>
+                        <td>
+                          <MediaValue value={c.after} plain={IDENTITY_FIELDS.has(c.field)} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

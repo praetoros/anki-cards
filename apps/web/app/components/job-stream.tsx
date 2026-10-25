@@ -16,6 +16,8 @@ import { useFetcher } from "react-router";
 
 import { JOB_EVENT, type LiveJobEvent } from "~/lib/live";
 
+import { MediaText } from "./media-ref";
+
 export interface StreamEvent {
   id: number;
   type: string;
@@ -165,12 +167,12 @@ function ToolLine({ call }: { call: ToolCall }) {
         <div className="flex flex-col gap-1 text-xs">
           {call.args !== undefined && (
             <pre className="max-h-48 overflow-auto rounded bg-muted p-2 whitespace-pre-wrap">
-              {JSON.stringify(call.args, null, 2)}
+              <MediaText text={JSON.stringify(call.args, null, 2)} />
             </pre>
           )}
           {call.result && (
             <pre className="max-h-64 overflow-auto rounded bg-muted p-2 whitespace-pre-wrap">
-              {call.result}
+              <MediaText text={call.result} />
             </pre>
           )}
         </div>
@@ -230,7 +232,9 @@ export function JobStream({ jobId }: { jobId: string }) {
           if (item.kind === "message") {
             return (
               <Bubble key={item.key} variant="muted" className="max-w-full">
-                <BubbleContent className="text-sm whitespace-pre-wrap">{item.text}</BubbleContent>
+                <BubbleContent className="text-sm whitespace-pre-wrap">
+                  <MediaText text={item.text} />
+                </BubbleContent>
               </Bubble>
             );
           }

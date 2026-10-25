@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@anki-cards/ui/components/table";
 
+import { MediaText } from "~/components/media-ref";
 import { rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.objectives";
 
@@ -64,7 +65,7 @@ export default function Objectives({ loaderData }: Route.ComponentProps) {
                   {library ? <Badge variant={VARIANT[library]}>{library}</Badge> : "—"}
                 </TableCell>
                 <TableCell className="max-w-sm text-xs whitespace-normal text-muted-foreground">
-                  {o.mappings.map((m) => m.rationale).join(" · ")}
+                  <MediaText text={o.mappings.map((m) => m.rationale).join(" · ")} />
                 </TableCell>
               </TableRow>
             );

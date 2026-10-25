@@ -7,6 +7,7 @@ import { Form, useNavigation } from "react-router";
 
 import { JobStream } from "~/components/job-stream";
 import { JobStatusBadge } from "~/components/jobs-panel";
+import { MediaText } from "~/components/media-ref";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.chat";
@@ -50,7 +51,7 @@ export default function Chat({ loaderData, actionData }: Route.ComponentProps) {
           <div key={job.id} className="flex flex-col gap-2">
             <Bubble align="end" className="self-end">
               <BubbleContent className="text-sm whitespace-pre-wrap">
-                {job.prompt.replace(/\n\n\(The user is looking at:[\s\S]*$/, "")}
+                <MediaText text={job.prompt.replace(/\n\n\(The user is looking at:[\s\S]*$/, "")} />
               </BubbleContent>
             </Bubble>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">

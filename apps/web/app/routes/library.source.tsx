@@ -3,6 +3,7 @@ import { Badge } from "@anki-cards/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@anki-cards/ui/components/card";
 import { Link } from "react-router";
 
+import { MediaRef, MediaText } from "~/components/media-ref";
 import { rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.source";
 
@@ -83,14 +84,22 @@ export default function SourceDetail({ loaderData }: Route.ComponentProps) {
               </div>
               <div className="flex flex-col gap-2">
                 <pre className="text-xs whitespace-pre-wrap">{unit.text || "(no text)"}</pre>
-                {entries.map(
-                  (e) =>
-                    e.explanation && (
-                      <p key={e.id} className="text-xs text-muted-foreground">
-                        {e.explanation}
+                {entries.map((e) => (
+                  <div key={e.id} className="flex flex-col gap-1">
+                    {e.explanation && (
+                      <p className="text-xs text-muted-foreground">
+                        <MediaText text={e.explanation} />
                       </p>
-                    ),
-                )}
+                    )}
+                    {e.mediaIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {e.mediaIds.map((id) => (
+                          <MediaRef key={id} id={id} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

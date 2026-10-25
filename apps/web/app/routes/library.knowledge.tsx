@@ -17,6 +17,7 @@ import { Textarea } from "@anki-cards/ui/components/textarea";
 import { useState } from "react";
 import { Form, Link, useSearchParams } from "react-router";
 
+import { MediaText } from "~/components/media-ref";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.knowledge";
 
@@ -180,7 +181,7 @@ export default function Knowledge({ loaderData, actionData }: Route.ComponentPro
           </div>
           {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
           <div className="text-sm leading-relaxed whitespace-pre-wrap">
-            {detail.concept.explanation}
+            <MediaText text={detail.concept.explanation} />
           </div>
           {detail.media.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -257,7 +258,9 @@ export default function Knowledge({ loaderData, actionData }: Route.ComponentPro
                       </div>
                     </Form>
                   ) : (
-                    <p className="text-sm">{ki.statement}</p>
+                    <p className="text-sm">
+                      <MediaText text={ki.statement} />
+                    </p>
                   )}
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     {evidence.map((e) =>

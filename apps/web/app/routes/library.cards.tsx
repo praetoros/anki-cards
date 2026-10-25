@@ -24,6 +24,7 @@ import { useState } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { MaskEditor } from "~/components/mask-editor";
+import { MediaText } from "~/components/media-ref";
 import { cardsWithPreviews } from "~/lib/cards.server";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import type { Route } from "./+types/library.cards";
@@ -307,7 +308,7 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
           <div key={row.id} className="flex flex-wrap items-center gap-2 border-t pt-2 text-sm">
             <Badge variant="outline">{row.cardType.replace("_", " ")}</Badge>
             <span className="min-w-0 flex-1">
-              {row.items.map((k) => k.displayId).join(", ")} — {row.rationale}
+              {row.items.map((k) => k.displayId).join(", ")} — <MediaText text={row.rationale} />
             </span>
             <Badge variant={row.status === "rejected" ? "destructive" : "outline"}>
               {row.status}
