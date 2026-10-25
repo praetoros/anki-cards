@@ -1,11 +1,13 @@
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 import type { TDatabase, TDb } from "./db/client.ts";
-import { tCard, tCardPlan, tReviewItem } from "./db/schema/index.ts";
+import { startGeneration, startPlanning } from "./cards.ts";
+import { tCard, tCardPlan, tReviewItem, tTopic } from "./db/schema/index.ts";
 import type { Gate } from "./domain/enums.ts";
 import { DomainError } from "./errors.ts";
 import { change } from "./history.ts";
 import { raiseReviewItem } from "./review.ts";
+import { getSetting } from "./settings.ts";
 import { createSnapshot, latestSnapshot } from "./snapshots.ts";
 
 export const GATE_LABEL: Record<Gate, string> = {
@@ -90,7 +92,25 @@ export async function approveGate(
       raisedBy: "user",
     }),
   );
+  if (await getSetting(db, "jobs.autoTrigger", libraryId))
+    await startNextStage(db, libraryId, gate, topicId);
   return snapshot;
+}
+
+/** With automatic triggering on, approving a gate starts the next stage's job. */
+async function startNextStage(
+  db: TDatabase,
+  libraryId: string,
+  gate: Gate,
+  topicId: string | null,
+) {
+  if (gate === "synthesis") {
+    const topics = await db.select().from(tTopic).where(eq(tTopic.libraryId, libraryId));
+    for (const t of topics.filter((x) => !x.excluded)) {
+      await startPlanning(db, libraryId, t.id).catch(() => undefined);
+    }
+  }
+  if (gate === "card_plan" && topicId) await startGeneration(db, libraryId, topicId);
 }
 
 export async function gateStatus(

@@ -182,8 +182,21 @@ function ToolLine({ call }: { call: ToolCall }) {
 export function JobStream({ jobId }: { jobId: string }) {
   const fetcher = useFetcher<{
     events: StreamEvent[];
-    job: { status: string; error: string | null };
+    job: {
+      status: string;
+      error: string | null;
+      provider: string;
+      model: string | null;
+      usage: {
+        inputTokens: number;
+        cachedInputTokens: number;
+        outputTokens: number;
+        costUsd?: number;
+        durationMs?: number;
+      } | null;
+    };
   }>();
+  const usage = fetcher.data?.job.usage;
   const [live, setLive] = useState<StreamEvent[]>([]);
 
   useEffect(() => {
@@ -267,6 +280,17 @@ export function JobStream({ jobId }: { jobId: string }) {
         })}
       </Trace>
       {fetcher.data?.job.error && <Badge variant="destructive">{fetcher.data.job.error}</Badge>}
+      {usage && (
+        <p className="text-xs text-muted-foreground">
+          {fetcher.data?.job.provider}
+          {fetcher.data?.job.model ? ` · ${fetcher.data.job.model}` : ""} ·{" "}
+          {(usage.inputTokens + usage.cachedInputTokens).toLocaleString()} in (
+          {usage.cachedInputTokens.toLocaleString()} cached) · {usage.outputTokens.toLocaleString()}{" "}
+          out
+          {usage.costUsd !== undefined && ` · ~$${usage.costUsd.toFixed(2)}`}
+          {usage.durationMs !== undefined && ` · ${Math.round(usage.durationMs / 1000)} s`}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import {
   backupNow,
+  defaultRunsFolder,
   getRunner,
+  getSetting,
+  gitRootAbove,
   listBackups,
   providerStatuses,
   type ProviderId,
@@ -31,6 +34,7 @@ export async function loader() {
     backups: await listBackups(db),
     trusted: await listTrustedSources(db, null),
     dataDir: paths.data,
+    runsInRepo: gitRootAbove((await getSetting(db, "paths.runs")) ?? defaultRunsFolder()),
   };
 }
 
@@ -75,6 +79,13 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           <code>{loaderData.dataDir}</code>
         </p>
       </div>
+      {loaderData.runsInRepo && (
+        <p className="rounded-md border border-destructive p-3 text-sm text-destructive">
+          The run folder is inside the git repository at {loaderData.runsInRepo}. Workers read
+          instruction files from parent folders up to the repository root, so they would pick up
+          that repository&apos;s instructions. Choose a run folder outside any repository.
+        </p>
+      )}
       <ProviderPanel providers={loaderData.providers} />
       <BackupPanel backups={loaderData.backups} />
       <TrustedSources sources={loaderData.trusted} scope="global" />
