@@ -7,7 +7,8 @@ import { eq } from "drizzle-orm";
 
 import type { TDb } from "../db/client.ts";
 import { nowIso } from "../db/helpers.ts";
-import { tProviderCheck, type TProviderCheckS } from "../db/schema/index.ts";
+import { tProviderCheck, type ProviderUsage, type TProviderCheckS } from "../db/schema/index.ts";
+import { codexTokenStatus } from "./codex-rollout.ts";
 import { PROVIDERS, type ProviderId } from "../domain/enums.ts";
 import { emitChange, emitNotice } from "../events.ts";
 import { withWriteLock } from "../lock.ts";
@@ -156,7 +157,7 @@ export interface ProviderStatus extends TProviderCheckS {
   help: string[];
 }
 
-async function saveCheck(db: TDb, row: Omit<TProviderCheckS, "checkedAt">) {
+async function saveCheck(db: TDb, row: Omit<TProviderCheckS, "checkedAt" | "usage">) {
   const values = { ...row, checkedAt: nowIso() };
   await withWriteLock(() =>
     db
@@ -218,8 +219,17 @@ export async function checkProvider(db: TDb, provider: ProviderId): Promise<Prov
     testedAt: previous?.testedAt ?? null,
   };
   await saveCheck(db, row);
+  let usage = previous?.usage ?? null;
+  if (provider === "codex") {
+    const status = await codexTokenStatus().catch(() => null);
+    if (status?.rateLimit) {
+      usage = { ...status.rateLimit, credits: status.credits, updatedAt: nowIso() };
+      await recordProviderUsage(db, provider, usage);
+    }
+  }
   return {
     ...row,
+    usage,
     checkedAt: nowIso(),
     label: PROVIDER_LABEL[provider],
     minVersion: MIN_VERSION[provider],
@@ -253,6 +263,7 @@ export async function providerStatuses(db: TDb): Promise<ProviderStatus[]> {
       testOk: null,
       testMessage: null,
       testedAt: null,
+      usage: null,
       checkedAt: "",
     };
     return {
@@ -274,6 +285,20 @@ export async function recordProviderTest(
     db
       .update(tProviderCheck)
       .set({ testOk: ok, testMessage: message, testedAt: nowIso() })
+      .where(eq(tProviderCheck.provider, provider)),
+  );
+  emitChange({ libraryId: null, tables: ["provider_checks"], changesetId: null });
+}
+
+export async function recordProviderUsage(
+  db: TDb,
+  provider: ProviderId,
+  usage: Omit<ProviderUsage, "updatedAt">,
+) {
+  await withWriteLock(() =>
+    db
+      .update(tProviderCheck)
+      .set({ usage: { ...usage, updatedAt: nowIso() } })
       .where(eq(tProviderCheck.provider, provider)),
   );
   emitChange({ libraryId: null, tables: ["provider_checks"], changesetId: null });

@@ -1,4 +1,4 @@
-import { jobEvents, getSession } from "@anki-cards/core";
+import { jobEvents, getSession, providerStatuses } from "@anki-cards/core";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { startHarness, type Harness } from "./harness.ts";
@@ -47,6 +47,12 @@ describe("workers over MCP", () => {
       const session = await getSession(h.runtime.db, job.sessionId);
       expect(session.cliSessionId).toBeTruthy();
       expect(session.contextTokens).toBeGreaterThan(0);
+      if (provider === "codex") {
+        expect(session.contextTokens).toBe(1200);
+        expect(session.contextWindow).toBe(400000);
+        const codex = (await providerStatuses(h.runtime.db)).find((p) => p.provider === "codex");
+        expect(codex?.usage).toMatchObject({ usedPercent: 40, windowMinutes: 10080 });
+      }
     });
   }
 

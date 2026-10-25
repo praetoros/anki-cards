@@ -91,6 +91,8 @@ export async function startHarness(): Promise<Harness> {
 
   const scenarioFile = join(dir, "scenario.json");
   process.env["FAKE_CLI_SCENARIO"] = scenarioFile;
+  // Keeps the app and the fake Codex away from the real ~/.codex session files.
+  process.env["CODEX_HOME"] = join(dir, "codex-home");
   const scenario = (steps: unknown[], exitCode = 0) =>
     writeFileSync(scenarioFile, JSON.stringify({ steps, exitCode }));
   scenario([{ tool: "ping" }, { tool: "complete_job", args: { summary: "pong" } }]);

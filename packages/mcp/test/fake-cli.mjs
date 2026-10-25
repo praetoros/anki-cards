@@ -1,6 +1,7 @@
 // Stand-in for `codex` and `claude` in tests. Speaks each CLI's JSON stream format and performs the
 // tool calls listed in the scenario file named by FAKE_CLI_SCENARIO against the app's MCP endpoint.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
@@ -141,6 +142,25 @@ for (const step of scenario.steps) {
 await client.close();
 
 if (isCodex) {
+  // Real Codex records the context size and usage limit in its session file, not on stdout.
+  if (process.env.CODEX_HOME) {
+    const day = join(process.env.CODEX_HOME, "sessions", "2026", "10", "25");
+    mkdirSync(day, { recursive: true });
+    const tokenCount = {
+      type: "event_msg",
+      payload: {
+        type: "token_count",
+        info: { last_token_usage: { input_tokens: 1200 }, model_context_window: 400000 },
+        rate_limits: {
+          primary: { used_percent: 40, window_minutes: 10080, resets_at: 1793518262 },
+        },
+      },
+    };
+    appendFileSync(
+      join(day, `rollout-2026-10-25T10-00-00-${sessionId}.jsonl`),
+      JSON.stringify(tokenCount) + "\n",
+    );
+  }
   emit({
     type: "turn.completed",
     usage: { input_tokens: 2000, cached_input_tokens: 1500, output_tokens: 100 },

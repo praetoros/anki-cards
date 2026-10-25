@@ -15,6 +15,7 @@ export * from "./settings.ts";
 export * from "./snapshots.ts";
 export * from "./jobs.ts";
 export * from "./sessions.ts";
+export * from "./worker/codex-rollout.ts";
 export * from "./worker/commands.ts";
 export * from "./worker/events.ts";
 export * from "./worker/providers.ts";

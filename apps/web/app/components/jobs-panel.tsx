@@ -1,4 +1,4 @@
-import type { TJobS, TSessionS } from "@anki-cards/core";
+import type { ProviderUsage, TJobS, TSessionS } from "@anki-cards/core";
 import { Badge } from "@anki-cards/ui/components/badge";
 import { Button } from "@anki-cards/ui/components/button";
 import { Progress } from "@anki-cards/ui/components/progress";
@@ -9,6 +9,7 @@ import { useFetcher } from "react-router";
 import { formatTime } from "~/lib/format";
 
 import { JobStream } from "./job-stream";
+import { ProviderUsageMeter } from "./provider-usage";
 
 const CONTEXT_WINDOW: Record<string, number> = { claude: 200_000, codex: 272_000 };
 
@@ -64,7 +65,7 @@ export function SessionCard({
   onOpenJob: (id: string) => void;
   actions?: React.ReactNode;
 }) {
-  const window = CONTEXT_WINDOW[session.provider] ?? 200_000;
+  const window = session.contextWindow ?? CONTEXT_WINDOW[session.provider] ?? 200_000;
   const pct = Math.min(100, Math.round((session.contextTokens / window) * 100));
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-2">
@@ -72,7 +73,10 @@ export function SessionCard({
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{session.title}</span>
         <Badge variant="outline">{session.provider}</Badge>
       </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div
+        className="flex items-center gap-2 text-xs text-muted-foreground"
+        title={`${Math.round(session.contextTokens / 1000)}k of ${Math.round(window / 1000)}k tokens`}
+      >
         <span className="w-24 shrink-0">Context {pct}%</span>
         <Progress value={pct} className="flex-1" />
       </div>
@@ -103,11 +107,13 @@ export function JobSheet({ jobId, onClose }: { jobId: string | null; onClose: ()
 export function JobsPanel({
   sessions,
   jobs,
+  usage = [],
   renderActions,
   footer,
 }: {
   sessions: TSessionS[];
   jobs: TJobS[];
+  usage?: { label: string; usage: ProviderUsage }[];
   renderActions?: (session: TSessionS) => React.ReactNode;
   footer?: React.ReactNode;
 }) {
@@ -115,6 +121,9 @@ export function JobsPanel({
   return (
     <aside className="flex w-full flex-col gap-2 border-l p-3 lg:w-80">
       <h2 className="text-sm font-semibold">AI sessions</h2>
+      {usage.map((u) => (
+        <ProviderUsageMeter key={u.label} label={u.label} usage={u.usage} />
+      ))}
       {sessions.length === 0 && (
         <p className="text-xs text-muted-foreground">
           Sessions appear here when you start AI work.

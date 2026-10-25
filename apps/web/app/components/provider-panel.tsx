@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useFetcher } from "react-router";
 
 import { JobStream } from "./job-stream";
+import { ProviderUsageMeter } from "./provider-usage";
 
 function ProviderCard({ provider }: { provider: ProviderStatus }) {
   const fetcher = useFetcher<{ jobId?: string; error?: string; message?: string }>();
@@ -51,6 +52,7 @@ function ProviderCard({ provider }: { provider: ProviderStatus }) {
         {provider.testMessage && (
           <p className="text-xs text-muted-foreground">Last test: {provider.testMessage}</p>
         )}
+        {provider.usage && <ProviderUsageMeter label="Usage" usage={provider.usage} />}
         <fetcher.Form method="post" className="flex gap-2" onSubmit={() => setShowTest(true)}>
           <input type="hidden" name="provider" value={provider.provider} />
           <Button

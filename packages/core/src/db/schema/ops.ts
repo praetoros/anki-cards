@@ -79,6 +79,8 @@ export const tSession = sqliteTable(
     cliSessionId: text(),
     status: text().$type<SessionStatus>().notNull(),
     contextTokens: integer().notNull().default(0),
+    /** The model's context window when the CLI reports it (Codex); null means use the default. */
+    contextWindow: integer(),
     jobCount: integer().notNull().default(0),
     parentSessionId: text(),
     ...timestampCols,
@@ -188,8 +190,18 @@ export const tProviderCheck = sqliteTable("provider_checks", {
   testOk: integer({ mode: "boolean" }),
   testMessage: text(),
   testedAt: text(),
+  /** The CLI's last reported usage limit, read after each job. */
+  usage: text({ mode: "json" }).$type<ProviderUsage | null>(),
   checkedAt: text().notNull(),
 });
+
+export interface ProviderUsage {
+  usedPercent: number;
+  windowMinutes: number | null;
+  resetsAt: string | null;
+  credits: string | null;
+  updatedAt: string;
+}
 
 export const tDisplayCounter = sqliteTable(
   "display_counters",

@@ -3,6 +3,7 @@ import {
   libraryOutline,
   listJobs,
   listSessions,
+  providerStatuses,
   sessionSummaryFor,
   startTopicSession,
 } from "@anki-cards/core";
@@ -32,6 +33,9 @@ export async function loader({ params }: Route.LoaderArgs) {
     summaries,
     topics: outline.map((t) => ({ id: t.id, title: t.title })),
     jobs: await listJobs(db, { libraryId, limit: 100 }),
+    usage: (await providerStatuses(db)).flatMap((p) =>
+      p.usage ? [{ label: p.label, usage: p.usage }] : [],
+    ),
   };
 }
 
@@ -124,6 +128,7 @@ export default function Library({ loaderData }: Route.ComponentProps) {
         <JobsPanel
           sessions={loaderData.sessions}
           jobs={loaderData.jobs}
+          usage={loaderData.usage}
           renderActions={(s) => (
             <SessionActions session={s} summary={loaderData.summaries[s.id] ?? null} />
           )}

@@ -4,11 +4,11 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 import type { TDatabase } from "../db/client.ts";
 import { nowIso } from "../db/helpers.ts";
-import { tJob, type JobUsage, type TJobS } from "../db/schema/index.ts";
+import { tJob, tSession, type JobUsage, type TJobS } from "../db/schema/index.ts";
 import type { ProviderId } from "../domain/enums.ts";
 import { bus, emitNotice } from "../events.ts";
 import { addJobEvent, getJob, startableJobs, updateJob } from "../jobs.ts";
@@ -21,12 +21,14 @@ import {
 } from "../sessions.ts";
 import { defaultRunsFolder, getSetting } from "../settings.ts";
 import { claudeArgs, claudeMcpConfig, codexArgs, type InvocationOptions } from "./commands.ts";
+import { codexTokenStatus } from "./codex-rollout.ts";
 import { parseClaudeLine, parseCodexLine, type WorkerEvent } from "./events.ts";
 import {
   checkProvider,
   executableFor,
   findProvider,
   recordProviderTest,
+  recordProviderUsage,
   workerEnv,
 } from "./providers.ts";
 import { finishCompaction, recordJobFailure } from "../session-actions.ts";
@@ -44,7 +46,10 @@ interface Running {
   lastToolError: { key: string; count: number } | null;
   usage: JobUsage;
   stderr: string;
+  limitWarned: boolean;
 }
+
+const CODEX_LIMIT_WARN_PERCENT = 80;
 
 const RESUME_PROMPT =
   "The previous run of this job stopped before it finished. Call get_workflow_state, check what is already done, and continue the task:\n\n";
@@ -67,6 +72,23 @@ export class JobRunner {
       if (e.tables.includes("jobs")) void this.tick();
     });
     void this.recoverInterrupted().then(() => this.tick());
+    void this.refreshCodexContexts();
+  }
+
+  /** Sessions saved before the context came from Codex's session file hold turn totals. */
+  private async refreshCodexContexts() {
+    const sessions = await this.db
+      .select()
+      .from(tSession)
+      .where(and(eq(tSession.provider, "codex"), isNotNull(tSession.cliSessionId)));
+    for (const session of sessions) {
+      const status = await codexTokenStatus(session.cliSessionId!).catch(() => null);
+      if (status && status.contextTokens !== session.contextTokens)
+        await updateSession(this.db, session.id, {
+          contextTokens: status.contextTokens,
+          contextWindow: status.contextWindow,
+        });
+    }
   }
 
   async stop() {
@@ -225,6 +247,7 @@ export class JobRunner {
       lastToolError: null,
       usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 },
       stderr: "",
+      limitWarned: false,
     };
     this.running.set(job.id, state);
     await addJobEvent(db, job, "started", {
@@ -265,7 +288,8 @@ export class JobRunner {
         state.usage.inputTokens += event.inputTokens;
         state.usage.cachedInputTokens += event.cachedInputTokens;
         state.usage.outputTokens += event.outputTokens;
-        await updateSession(db, job.sessionId, { contextTokens: event.contextTokens });
+        if (job.provider === "codex") await this.syncCodexContext(state);
+        else await updateSession(db, job.sessionId, { contextTokens: event.contextTokens });
         break;
       case "rate_limit":
         state.rateLimit = { resetsAt: event.resetsAt };
@@ -296,9 +320,34 @@ export class JobRunner {
     await addJobEvent(db, job, event.type, event as unknown as Record<string, unknown>);
   }
 
+  /** Codex's JSON stream has no context size, so it is read from the session file Codex writes. */
+  private async syncCodexContext(state: Running) {
+    const session = await getSession(this.db, state.job.sessionId);
+    if (!session.cliSessionId) return;
+    const status = await codexTokenStatus(session.cliSessionId).catch(() => null);
+    if (!status) return;
+    await updateSession(this.db, session.id, {
+      contextTokens: status.contextTokens,
+      contextWindow: status.contextWindow,
+    });
+    const limit = status.rateLimit;
+    if (limit) await recordProviderUsage(this.db, "codex", { ...limit, credits: status.credits });
+    if (limit && limit.usedPercent >= CODEX_LIMIT_WARN_PERCENT && !state.limitWarned) {
+      state.limitWarned = true;
+      emitNotice({
+        level: "warning",
+        title: "Codex usage limit",
+        message: `Codex has used ${Math.round(limit.usedPercent)}% of its usage limit${
+          limit.resetsAt ? `; it resets ${limit.resetsAt}` : ""
+        }.`,
+      });
+    }
+  }
+
   private async onExit(state: Running, code: number) {
     const db = this.db;
     this.running.delete(state.job.id);
+    if (state.job.provider === "codex") await this.syncCodexContext(state);
     const job = await getJob(db, state.job.id);
     const usage = {
       ...state.usage,
