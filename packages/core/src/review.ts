@@ -300,3 +300,36 @@ export async function assertApproved(
   }
   return approvals;
 }
+
+/** User feedback on library content: a `feedback` item already waiting for the AI. */
+export async function createFeedbackItem(
+  db: TDatabase,
+  libraryId: string,
+  input: { target: ReviewTarget; title: string; message: string; topicId: string | null },
+) {
+  const message = input.message.trim();
+  if (!message) throw new DomainError("invalid", "Write what you want changed.");
+  const { result } = await change(
+    db,
+    { actor: "user", action: "give_feedback", libraryId },
+    async (c) => {
+      const item = await raiseReviewItem(c, {
+        libraryId,
+        kind: "feedback",
+        title: input.title,
+        targets: [input.target],
+        topicId: input.topicId,
+        raisedBy: "user",
+      });
+      await c.insert("review_messages", {
+        reviewItemId: item.id,
+        author: "user",
+        action: "comment",
+        body: message,
+        processed: "pending",
+      });
+      return c.update("review_items", item.id, { status: "awaiting_ai" });
+    },
+  );
+  return result;
+}

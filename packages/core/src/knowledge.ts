@@ -11,6 +11,7 @@ import {
   tMediaLink,
   tObjectiveMapping,
   tRelationship,
+  tSourceUnit,
   tSubtopic,
   tTopic,
   type ExternalReference,
@@ -737,6 +738,17 @@ export async function conceptDetail(db: TDb, libraryId: string, idOrDisplay: str
   const evidence = kiIds.length
     ? await db.select().from(tEvidence).where(inArray(tEvidence.knowledgeItemId, kiIds))
     : [];
+  const unitIds = evidence.map((e) => e.sourceUnitId).filter((id): id is string => Boolean(id));
+  const units = unitIds.length
+    ? await db
+        .select({
+          id: tSourceUnit.id,
+          displayId: tSourceUnit.displayId,
+          sourceId: tSourceUnit.sourceId,
+        })
+        .from(tSourceUnit)
+        .where(inArray(tSourceUnit.id, unitIds))
+    : [];
   const links = await db
     .select({ link: tMediaLink, media: tMediaAsset })
     .from(tMediaLink)
@@ -773,7 +785,10 @@ export async function conceptDetail(db: TDb, libraryId: string, idOrDisplay: str
     concept,
     subtopic,
     knowledgeItems,
-    evidence,
+    evidence: evidence.map((e) => ({
+      ...e,
+      unit: units.find((u) => u.id === e.sourceUnitId) ?? null,
+    })),
     media: links,
     relationships,
     objectives: mappings,

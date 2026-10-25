@@ -18,6 +18,7 @@
     "@react-router/node": "catalog:",
     "@shadcn/react": "catalog:",
     "cn": "catalog:",
+    "drizzle-orm": "catalog:",
     "isbot": "catalog:",
     "lucide-react": "catalog:",
     "next-themes": "catalog:",
