@@ -4,6 +4,7 @@ import {
   conceptDetail,
   jobEvents,
   listReviewItems,
+  reviewItemDetail,
   registerSource,
   sendFeedback,
 } from "@anki-cards/core";
@@ -64,6 +65,7 @@ describe("synthesis and the review loop", () => {
           kind: "enrichment_request",
           title: "Add normal cycle duration ranges",
           description: "The lecture gives one heart rate only.",
+          suggestion: "Add the cycle duration at 150 bpm to CON-001 from a physiology text.",
           payload: { conceptIds: ["CON-001"], purpose: "Duration at other heart rates" },
           targets: [{ table: "concepts", id: "CON-001" }],
         },
@@ -83,6 +85,7 @@ describe("synthesis and the review loop", () => {
 
     const items = await listReviewItems(h.runtime.db, h.libraryId);
     expect(items[0]?.category).toBe("requires_decision");
+    expect(items[0]?.suggestion).toContain("150 bpm");
     await expect(approveGate(h.runtime.db, h.libraryId, "synthesis")).rejects.toThrow(
       "Resolve these first",
     );
@@ -90,10 +93,11 @@ describe("synthesis and the review loop", () => {
 
   it("processes feedback and approved enrichment in a feedback job", async () => {
     const db = h.runtime.db;
-    await actOnReviewItem(db, h.libraryId, "R-001", {
-      action: "approve",
-      message: "Yes, add ranges.",
-    });
+    const accepted = await actOnReviewItem(db, h.libraryId, "R-001", { action: "accept" });
+    expect(accepted.status).toBe("awaiting_ai");
+    const thread = await reviewItemDetail(db, h.libraryId, "R-001");
+    expect(thread.messages[0]?.body).toContain("Accepted the suggested resolution");
+    expect(thread.approvals.map((a) => a.kind)).toEqual(["text_enrichment"]);
     h.scenario([
       { tool: "get_review_item", args: { reviewItemId: "R-001" } },
       ki("At 150 beats per minute the cycle lasts about 0.4 s.", {

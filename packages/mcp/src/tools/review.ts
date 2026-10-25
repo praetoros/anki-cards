@@ -59,11 +59,17 @@ export const getReviewItem = defineTool({
 export const replyToReviewItem = defineTool({
   name: "reply_to_review_item",
   description:
-    "Answer the user on a review item after acting on it. outcome done resolves it; needs_user hands it back with your question.",
+    "Answer the user on a review item after acting on it. outcome done resolves it; needs_user hands it back with your question and, in suggestion, a revised proposal the user can accept.",
   input: z.object({
     reviewItemId: z.string(),
     body: z.string().min(1),
     outcome: z.enum(["done", "needs_user"]),
+    suggestion: z
+      .string()
+      .optional()
+      .describe(
+        "With needs_user: your revised proposal, replacing the item's suggested resolution",
+      ),
   }),
   run: async (a, ctx) => {
     const item = await aiReplyToReviewItem(
@@ -84,6 +90,12 @@ export const raiseReviewItemTool = defineTool({
     kind: z.enum(REVIEW_KINDS),
     title: z.string(),
     description: z.string(),
+    suggestion: z
+      .string()
+      .min(1)
+      .describe(
+        "What you propose to do about it, concretely enough to carry out as written (display ids, the new wording). The user can accept it as is or give feedback instead.",
+      ),
     category: z.enum(REVIEW_CATEGORIES).optional(),
     payload: z.record(z.string(), z.unknown()).optional(),
     targets: z.array(z.object({ table: z.enum(TARGET_TABLES), id: z.string() })).optional(),
@@ -125,6 +137,7 @@ export const raiseReviewItemTool = defineTool({
         kind: a.kind,
         title: a.title,
         description: a.description,
+        suggestion: a.suggestion,
         category: a.category,
         payload,
         targets,

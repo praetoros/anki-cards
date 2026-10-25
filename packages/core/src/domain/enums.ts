@@ -109,6 +109,7 @@ export const REVIEW_STATUSES = ["open", "awaiting_ai", "resolved", "deferred", "
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
 export const REVIEW_ACTIONS = [
+  "accept",
   "approve",
   "reject",
   "defer",

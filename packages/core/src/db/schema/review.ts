@@ -19,6 +19,8 @@ export const tReviewItem = sqliteTable(
     status: text().$type<ReviewStatus>().notNull(),
     title: text().notNull(),
     description: text().notNull().default(""),
+    /** What the raiser proposes to do about it; the user can accept it or give feedback. */
+    suggestion: text().notNull().default(""),
     payload: text({ mode: "json" }).$type<Record<string, unknown>>().notNull(),
     topicId: text(),
     raisedBy: text().$type<Actor>().notNull(),

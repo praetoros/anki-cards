@@ -1,0 +1,1 @@
+ALTER TABLE `review_items` ADD `suggestion` text DEFAULT '' NOT NULL;

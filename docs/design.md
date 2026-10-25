@@ -198,16 +198,20 @@ One `review_items` table with:
   kind with its own component.
 - `status`: open, awaiting AI, resolved, deferred, excluded.
 - Targets (`review_item_targets`) and a message thread (`review_messages`).
+- `suggestion`: the resolution the raiser recommends, written so it can be carried out as stated.
+  Workers must give one (`raise_review_item` requires it); items the app raises get a default.
+  A worker answering with `needs_user` can replace it with a revised proposal.
 
 User actions:
 
-| Action            | Handled by | Effect                                                                                                             |
-| ----------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
-| Approve           | server     | applies the approval (creates an `approvals` row for enrichment/correction/visual kinds), resolves the item        |
-| Reject            | server     | resolves the item; the proposal is not applied                                                                     |
-| Defer             | server     | status deferred; stays visible; doesn't block gates                                                                |
-| Exclude           | server     | hides the target from the learning view and from planning; source data kept                                        |
-| Correct / comment | AI         | adds a user message and marks the item _awaiting AI_; the next feedback job processes it and replies in the thread |
+| Action            | Handled by      | Effect                                                                                                                                                                                                                                                              |
+| ----------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Approve           | server          | applies the approval (creates an `approvals` row for enrichment/correction/visual kinds), resolves the item                                                                                                                                                         |
+| Reject            | server          | resolves the item; the proposal is not applied                                                                                                                                                                                                                      |
+| Defer             | server          | status deferred; stays visible; doesn't block gates                                                                                                                                                                                                                 |
+| Exclude           | server          | hides the target from the learning view and from planning; source data kept                                                                                                                                                                                         |
+| Accept suggestion | server, then AI | applies any approvals the item carries and records the acceptance; items that need work (most AI-raised kinds) go to _awaiting AI_ and the next feedback job carries out the suggestion; untrusted-source, visual-proposal and informational items resolve directly |
+| Correct / comment | AI              | adds a user message and marks the item _awaiting AI_; the next feedback job processes it and replies in the thread                                                                                                                                                  |
 
 Approval is never recorded as verification.
 

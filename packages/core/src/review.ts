@@ -56,6 +56,22 @@ const DECISION_KINDS: ReviewKind[] = [
   "untrusted_source",
 ];
 
+/** Suggestions for items the app raises itself, where no worker proposes one. */
+const DEFAULT_SUGGESTION: Partial<Record<ReviewKind, string>> = {
+  untrusted_source: "Keep the fact with this citation.",
+  visual_proposal: "Embed this image in the proposed concepts with the stated attribution.",
+  job_failure: "Ask the AI to look at what went wrong and finish the job.",
+  repeated_tool_error: "Ask the AI to look at the error and finish the job another way.",
+};
+
+/** Accepting these needs no further AI work: the server applies them directly. */
+const ACCEPT_WITHOUT_AI: ReviewKind[] = [
+  "untrusted_source",
+  "visual_proposal",
+  "duplicate_consolidated",
+  "stage_gate",
+];
+
 export async function raiseReviewItem(
   c: Changes,
   input: {
@@ -63,6 +79,7 @@ export async function raiseReviewItem(
     kind: ReviewKind;
     title: string;
     description?: string;
+    suggestion?: string;
     category?: ReviewCategory;
     payload?: Record<string, unknown>;
     targets?: ReviewTarget[];
@@ -82,6 +99,7 @@ export async function raiseReviewItem(
       status: category === "informational" ? "resolved" : "open",
       title: input.title,
       description: input.description ?? "",
+      suggestion: input.suggestion?.trim() || DEFAULT_SUGGESTION[input.kind] || "",
       payload: input.payload ?? {},
       topicId: input.topicId ?? null,
       raisedBy: input.raisedBy,
@@ -210,17 +228,50 @@ export async function actOnReviewItem(
   if ((input.action === "correct" || input.action === "comment") && !message) {
     throw new DomainError("invalid", "Write what you want changed.");
   }
+  const acceptNeedsAi =
+    input.action === "accept" && Boolean(item.suggestion) && !ACCEPT_WITHOUT_AI.includes(item.kind);
   const { result } = await change(db, ctx, async (c) => {
     if (message || input.action !== "comment") {
       await c.insert("review_messages", {
         reviewItemId: item.id,
         author: "user",
         action: input.action,
-        body: message,
-        processed: input.action === "correct" || input.action === "comment" ? "pending" : "n/a",
+        body:
+          input.action === "accept"
+            ? [`Accepted the suggested resolution: ${item.suggestion}`, message]
+                .filter(Boolean)
+                .join("\n\n")
+            : message,
+        processed:
+          input.action === "correct" || input.action === "comment" || acceptNeedsAi
+            ? "pending"
+            : "n/a",
       });
     }
     switch (input.action) {
+      case "accept":
+        for (const a of approvalFor(item)) {
+          await c.insert("approvals", {
+            reviewItemId: item.id,
+            kind: a.kind,
+            scope: a.scope,
+            purpose: a.purpose,
+            status: "active",
+          });
+        }
+        if (item.kind === "visual_proposal") await embedProposedVisual(c, item);
+        return c.update(
+          "review_items",
+          item.id,
+          {
+            status:
+              acceptNeedsAi || (approvalFor(item).length > 0 && item.kind !== "visual_proposal")
+                ? "awaiting_ai"
+                : "resolved",
+            resolution: "suggestion accepted",
+          },
+          input.expectedVersion,
+        );
       case "approve":
         for (const a of approvalFor(item)) {
           await c.insert("approvals", {
@@ -266,7 +317,7 @@ export async function aiReplyToReviewItem(
   db: TDatabase,
   ctx: ChangeContext & { libraryId: string },
   idOrDisplay: string,
-  input: { body: string; outcome: "done" | "needs_user" },
+  input: { body: string; outcome: "done" | "needs_user"; suggestion?: string },
 ) {
   const item = await resolveRow(db, "review_items", ctx.libraryId, idOrDisplay);
   const { result } = await change(db, { ...ctx, reviewItemId: item.id }, async (c) => {
@@ -287,6 +338,7 @@ export async function aiReplyToReviewItem(
     return c.update("review_items", item.id, {
       status,
       resolution: input.outcome === "done" ? "resolved by AI" : item.resolution,
+      suggestion: input.suggestion?.trim() || item.suggestion,
     });
   });
   return result;

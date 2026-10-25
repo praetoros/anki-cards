@@ -13,6 +13,7 @@ import { Button } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
+import { MediaRef, MediaText, MediaValue } from "~/components/media-ref";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
 import { describeTargets } from "~/lib/targets.server";
@@ -60,7 +61,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       action,
       message: formString(form, "message"),
     });
-    if (action === "correct" || action === "comment" || action === "approve") {
+    if (["correct", "comment", "approve", "accept"].includes(action)) {
       await scheduleAutoFeedback(db, params.libraryId);
     }
     return { ok: true, message: "Saved." };
@@ -84,7 +85,9 @@ function Payload({ payload }: { payload: Record<string, unknown> }) {
       {entries.map(([k, v]) => (
         <div key={k} className="contents">
           <dt className="text-muted-foreground">{k}</dt>
-          <dd className="whitespace-pre-wrap">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+          <dd className="whitespace-pre-wrap">
+            <MediaValue value={v} max={2000} />
+          </dd>
         </div>
       ))}
     </dl>
@@ -140,6 +143,11 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
               {item.status === "awaiting_ai" && <Badge variant="secondary">waiting for AI</Badge>}
             </span>
             <span>{item.title}</span>
+            {item.suggestion && item.status === "open" && (
+              <span className="line-clamp-2 text-xs text-muted-foreground">
+                Suggested: {item.suggestion}
+              </span>
+            )}
           </Link>
         ))}
       </section>
@@ -155,7 +163,9 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
             <Badge variant="outline">raised by {selected.item.raisedBy}</Badge>
           </div>
           {selected.item.description && (
-            <p className="text-sm whitespace-pre-wrap">{selected.item.description}</p>
+            <p className="text-sm whitespace-pre-wrap">
+              <MediaText text={selected.item.description} />
+            </p>
           )}
           {proposalMedia && (
             <img
@@ -169,7 +179,9 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
             <ul className="flex flex-col gap-1 text-sm">
               {selected.targetViews.map((t) => (
                 <li key={t.id}>
-                  {t.href ? (
+                  {t.table === "media_assets" ? (
+                    <MediaRef id={t.id} size="md" />
+                  ) : t.href ? (
                     <Link to={t.href} className="font-mono text-xs hover:underline">
                       {t.displayId}
                     </Link>
@@ -196,17 +208,63 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
                   {m.author === "ai" ? "AI" : "You"}
                   {m.action ? ` · ${m.action}` : ""} · {formatDateTime(m.createdAt)}
                 </span>
-                {m.body || <em className="text-muted-foreground">(no message)</em>}
+                {m.body ? (
+                  <MediaText text={m.body} />
+                ) : (
+                  <em className="text-muted-foreground">(no message)</em>
+                )}
               </div>
             ))}
           </div>
+          {selected.item.suggestion && (
+            <Form
+              method="post"
+              className="flex flex-col gap-2 rounded-md border border-primary/40 bg-muted/40 p-3"
+              key={`suggestion-${selected.item.id}`}
+            >
+              <input type="hidden" name="itemId" value={selected.item.id} />
+              <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Suggested resolution
+              </span>
+              <p className="text-sm whitespace-pre-wrap">
+                <MediaText text={selected.item.suggestion} />
+              </p>
+              {(selected.item.status === "open" || selected.item.status === "deferred") && (
+                <Button
+                  type="submit"
+                  size="sm"
+                  name="intent"
+                  value="accept"
+                  disabled={busy}
+                  className="self-start"
+                >
+                  Accept suggestion
+                </Button>
+              )}
+            </Form>
+          )}
           <Form method="post" className="flex flex-col gap-2" key={selected.item.id}>
             <input type="hidden" name="itemId" value={selected.item.id} />
-            <Textarea name="message" rows={3} placeholder="Correction or comment for the AI" />
+            <Textarea
+              name="message"
+              rows={3}
+              placeholder={
+                selected.item.suggestion
+                  ? "Or tell the AI what to do instead"
+                  : "Correction or comment for the AI"
+              }
+            />
             {actionData?.error && <p className="text-sm text-destructive">{actionData.error}</p>}
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" size="sm" name="intent" value="correct" disabled={busy}>
-                Send correction
+              <Button
+                type="submit"
+                size="sm"
+                variant={selected.item.suggestion ? "outline" : "default"}
+                name="intent"
+                value="correct"
+                disabled={busy}
+              >
+                Send feedback
               </Button>
               <Button
                 type="submit"
@@ -218,16 +276,18 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
               >
                 Comment
               </Button>
-              <Button
-                type="submit"
-                size="sm"
-                variant="secondary"
-                name="intent"
-                value="approve"
-                disabled={busy}
-              >
-                Approve
-              </Button>
+              {!selected.item.suggestion && (
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="secondary"
+                  name="intent"
+                  value="approve"
+                  disabled={busy}
+                >
+                  Approve
+                </Button>
+              )}
               <Button
                 type="submit"
                 size="sm"
