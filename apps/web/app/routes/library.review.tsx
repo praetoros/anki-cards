@@ -12,12 +12,12 @@ import {
 import { Badge } from "@anki-cards/ui/components/badge";
 import { Button } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
-import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Form, Link, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { ImagePreview } from "~/components/image-preview";
 import { MediaRef, MediaText, MediaValue } from "~/components/media-ref";
+import { Spinner } from "~/components/xdd-face";
 import { useActionToast } from "~/lib/action-toast";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
@@ -176,7 +176,7 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
         {awaiting > 0 && (
           <Form
             method="post"
-            className="flex flex-col gap-2 rounded-md border border-rose-gold/40 bg-accent/20 p-2 text-sm"
+            className="flex flex-col gap-2 rounded-md border border-highlight/40 bg-accent/20 p-2 text-sm"
           >
             <span>
               {awaiting === 1 ? "1 item is" : `${awaiting} items are`} ready for the AI. Send them
@@ -196,7 +196,7 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
         )}
         {working > 0 && (
           <p className="flex items-center gap-2 rounded-md border p-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin text-rose-gold" />
+            <Spinner className="text-highlight" />
             The AI is working on {working === 1 ? "1 item" : `${working} items`}. Its replies appear
             on each item.
           </p>
@@ -205,7 +205,7 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
           (filter === "active" ? (
             <p className="text-sm text-muted-foreground">
               Nothing needs your review.{" "}
-              <Link to=".." className="text-rose-gold underline">
+              <Link to=".." className="text-highlight underline">
                 See the next step
               </Link>
             </p>
@@ -334,7 +334,7 @@ export default function Review({ loaderData, actionData }: Route.ComponentProps)
           )}
           {withAi.has(selected.item.id) ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin text-rose-gold" />
+              <Spinner className="text-highlight" />
               The AI is working on this item. You can act on it again once it replies.
             </p>
           ) : (

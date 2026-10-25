@@ -7,15 +7,23 @@ import {
   ScrollRestoration,
 } from "react-router";
 
+import { useTheme } from "~/lib/theme";
+import { readTheme } from "~/lib/theme.server";
 import type { Route } from "./+types/root";
 import "./app.css";
 
+export async function loader({ request }: Route.LoaderArgs) {
+  return { theme: await readTheme(request) };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const theme = useTheme();
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={theme === "xdd" ? "dark xdd" : "dark"}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {theme === "xdd" && <link rel="icon" href="/xdd.svg" type="image/svg+xml" />}
         <Meta />
         <Links />
       </head>

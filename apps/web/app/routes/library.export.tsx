@@ -69,7 +69,7 @@ export default function Export({ loaderData, actionData }: Route.ComponentProps)
             {topics.map((t) => (
               <li key={t.id} className="flex items-center gap-2">
                 {t.approved ? (
-                  <Check className="size-4 text-rose-gold" />
+                  <Check className="size-4 text-highlight" />
                 ) : (
                   <span className="size-4" />
                 )}
@@ -81,7 +81,7 @@ export default function Export({ loaderData, actionData }: Route.ComponentProps)
                   <Link
                     to={`../cards?topic=${t.id}`}
                     relative="path"
-                    className="text-xs text-rose-gold underline"
+                    className="text-xs text-highlight underline"
                   >
                     Open cards
                   </Link>
@@ -98,7 +98,7 @@ export default function Export({ loaderData, actionData }: Route.ComponentProps)
       </Card>
 
       {latest && (
-        <Card size="sm" className="border-rose-gold/40">
+        <Card size="sm" className="border-highlight/40">
           <CardHeader>
             <CardTitle>Latest export</CardTitle>
             <CardDescription>

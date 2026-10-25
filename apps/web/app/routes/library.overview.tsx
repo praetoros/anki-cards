@@ -23,10 +23,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@anki-cards/ui/components/card";
-import { Check, LoaderCircle } from "lucide-react";
+import { Check } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { ConfirmSubmit } from "~/components/confirm-submit";
+import { Spinner } from "~/components/xdd-face";
 import { useActionToast } from "~/lib/action-toast";
 import { formatDateTime } from "~/lib/format";
 import { formString, handle, rt } from "~/lib/runtime.server";
@@ -91,9 +92,9 @@ function Stepper({ states }: { states: Route.ComponentProps["loaderData"]["state
             <span
               className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-medium ${
                 state === "done"
-                  ? "bg-rose-gold/20 text-rose-gold"
+                  ? "bg-highlight/20 text-highlight"
                   : state === "current"
-                    ? "bg-rose-gold text-primary-foreground"
+                    ? "bg-highlight text-primary-foreground"
                     : "bg-muted text-muted-foreground"
               }`}
             >
@@ -122,13 +123,13 @@ function NextStepCard({ next, progress }: { next: NextStep; progress: Progress }
   const action = next.action;
   const partlyCovered = progress.sources.pending.filter((s) => s.covered > 0);
   return (
-    <Card className="border-rose-gold/40 bg-linear-to-br from-accent/30 to-transparent">
+    <Card className="border-highlight/40 bg-linear-to-br from-accent/30 to-transparent">
       <CardHeader>
-        <CardDescription className="text-xs font-medium tracking-wide text-rose-gold uppercase">
+        <CardDescription className="text-xs font-medium tracking-wide text-highlight uppercase">
           {next.done ? "Done" : "Next step"}
         </CardDescription>
         <CardTitle className="flex items-center gap-2 text-xl">
-          {!action && <LoaderCircle className="size-5 animate-spin text-rose-gold" />}
+          {!action && <Spinner size="md" className="text-highlight" />}
           {next.title}
         </CardTitle>
         <CardDescription>{next.detail}</CardDescription>

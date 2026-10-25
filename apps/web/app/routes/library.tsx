@@ -98,7 +98,7 @@ export default function Library({ loaderData }: Route.ComponentProps) {
   const { library } = loaderData;
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex flex-col gap-3 border-b border-rose-gold/10 bg-linear-to-b from-accent/25 to-transparent px-5 pt-5">
+      <div className="flex flex-col gap-3 border-b border-highlight/10 bg-linear-to-b from-accent/25 to-transparent px-5 pt-5">
         <h1 className="text-3xl font-light">
           <em className="text-shimmer font-normal">{library.name}</em>
         </h1>
@@ -111,8 +111,8 @@ export default function Library({ loaderData }: Route.ComponentProps) {
               className={({ isActive }) =>
                 `border-b-2 px-3 pt-1 pb-2.5 text-sm transition-colors ${
                   isActive
-                    ? "border-rose-gold font-medium text-rose-gold"
-                    : "border-transparent text-muted-foreground hover:border-rose-gold/30 hover:text-foreground"
+                    ? "border-highlight font-medium text-highlight"
+                    : "border-transparent text-muted-foreground hover:border-highlight/30 hover:text-foreground"
                 }`
               }
             >

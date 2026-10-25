@@ -23,12 +23,13 @@ import {
 import { Badge } from "@anki-cards/ui/components/badge";
 import { Button, buttonVariants } from "@anki-cards/ui/components/button";
 import { Textarea } from "@anki-cards/ui/components/textarea";
-import { Check, LoaderCircle } from "lucide-react";
+import { Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { ImageModal } from "~/components/image-preview";
 import { MaskEditor } from "~/components/mask-editor";
+import { Spinner } from "~/components/xdd-face";
 import { useActionToast } from "~/lib/action-toast";
 import { formatDateTime } from "~/lib/format";
 import { MediaText } from "~/components/media-ref";
@@ -345,16 +346,16 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
             className={`rounded-md px-2 py-1 text-sm ${t.id === d.topicId ? "bg-muted font-medium" : "text-muted-foreground"}`}
           >
             {t.title}
-            {t.activeJob && <LoaderCircle className="ml-1 inline size-3 animate-spin" />}
+            {t.activeJob && <Spinner size="xs" className="ml-1 inline" />}
             {!t.activeJob && t.setApproved && (
-              <Check className="ml-1 inline size-3 text-rose-gold" />
+              <Check className="ml-1 inline size-3 text-highlight" />
             )}
           </Link>
         ))}
       </nav>
       {d.activeJob && (
-        <p className="flex items-center gap-2 rounded-md border border-rose-gold/40 bg-accent/20 p-2 text-sm">
-          <LoaderCircle className="size-4 animate-spin text-rose-gold" />
+        <p className="flex items-center gap-2 rounded-md border border-highlight/40 bg-accent/20 p-2 text-sm">
+          <Spinner className="text-highlight" />
           {d.activeJob === "planning"
             ? "The AI is planning the cards for this topic. The plan appears here when it is ready."
             : "The AI is writing the cards. They appear below as they are written."}
@@ -534,7 +535,7 @@ export default function Cards({ loaderData, actionData }: Route.ComponentProps) 
         {d.readyForAi > 0 && (
           <Form
             method="post"
-            className="flex flex-wrap items-center gap-2 rounded-md border border-rose-gold/40 bg-accent/20 p-2 text-sm"
+            className="flex flex-wrap items-center gap-2 rounded-md border border-highlight/40 bg-accent/20 p-2 text-sm"
           >
             <span className="flex-1">
               {d.readyForAi === 1

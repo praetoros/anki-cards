@@ -9,8 +9,9 @@
 @source "../../../../apps/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
-/* Midnight & rose gold. The app is dark-only: <html> carries the `dark` class so
-   component `dark:` variants apply, and these tokens are the only palette. */
+/* Midnight & rose gold is the default theme; the `xdd` class on <html> switches to the xdd
+   palette below. The app is dark-only: <html> carries the `dark` class so component `dark:`
+   variants apply. `--highlight*` are the theme's accent colours used by the app's own markup. */
 :root {
   color-scheme: dark;
 
@@ -47,10 +48,58 @@
   --sidebar-border: oklch(0.9 0.04 40 / 11%);
   --sidebar-ring: oklch(0.8 0.075 45);
 
-  --rose-gold: oklch(0.8 0.075 45);
-  --rose-gold-deep: oklch(0.68 0.09 30);
-  --champagne: oklch(0.9 0.05 70);
+  --highlight: oklch(0.8 0.075 45);
+  --highlight-deep: oklch(0.68 0.09 30);
+  --highlight-pale: oklch(0.9 0.05 70);
   --plum-glow: oklch(0.42 0.12 330);
+
+  /* The xdd face drawing keeps its own colours in either theme. */
+  --xdd-fur: oklch(0.86 0.04 165);
+  --xdd-nose: oklch(0.6 0.12 45);
+  --xdd-teeth: oklch(0.97 0.01 110);
+  --xdd-smudge: oklch(0.45 0.09 165);
+  --xdd-void: oklch(0.17 0.03 255);
+}
+
+/* xdd: taken from the emote's low-light webcam frame. Navy-black backdrop, pale green-grey
+   fur as the highlight, orange-brown nose as the warm accent, white teeth for text. */
+.xdd {
+  --background: var(--xdd-void);
+  --foreground: oklch(0.95 0.012 120);
+  --card: oklch(0.215 0.026 240 / 82%);
+  --card-foreground: oklch(0.95 0.012 120);
+  --popover: oklch(0.23 0.028 240);
+  --popover-foreground: oklch(0.95 0.012 120);
+  --primary: var(--xdd-fur);
+  --primary-foreground: oklch(0.2 0.03 255);
+  --secondary: oklch(0.27 0.03 230);
+  --secondary-foreground: oklch(0.95 0.012 120);
+  --muted: oklch(0.25 0.028 235);
+  --muted-foreground: oklch(0.73 0.03 175);
+  --accent: oklch(0.31 0.04 195);
+  --accent-foreground: oklch(0.96 0.012 120);
+  --destructive: oklch(0.68 0.17 30);
+  --border: oklch(0.9 0.04 165 / 11%);
+  --input: oklch(0.9 0.04 165 / 15%);
+  --ring: var(--xdd-fur);
+  --chart-1: var(--xdd-fur);
+  --chart-2: oklch(0.62 0.12 45);
+  --chart-3: oklch(0.72 0.1 150);
+  --chart-4: oklch(0.8 0.09 75);
+  --chart-5: oklch(0.6 0.08 255);
+  --radius: 1rem;
+  --sidebar: oklch(0.2 0.028 250);
+  --sidebar-foreground: oklch(0.95 0.012 120);
+  --sidebar-primary: var(--xdd-fur);
+  --sidebar-primary-foreground: oklch(0.2 0.03 255);
+  --sidebar-accent: oklch(0.31 0.04 195);
+  --sidebar-accent-foreground: oklch(0.96 0.012 120);
+  --sidebar-border: oklch(0.9 0.04 165 / 11%);
+  --sidebar-ring: var(--xdd-fur);
+
+  --highlight: var(--xdd-fur);
+  --highlight-deep: var(--xdd-nose);
+  --highlight-pale: var(--xdd-teeth);
 }
 
 @theme inline {
@@ -79,9 +128,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --color-rose-gold: var(--rose-gold);
-  --color-rose-gold-deep: var(--rose-gold-deep);
-  --color-champagne: var(--champagne);
+  --color-highlight: var(--highlight);
+  --color-highlight-deep: var(--highlight-deep);
+  --color-highlight-pale: var(--highlight-pale);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -96,6 +145,23 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   --animate-rise: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-handheld: handheld 7s ease-in-out infinite alternate;
+
+  /* The slow sway of a phone camera held at arm's length. */
+  @keyframes handheld {
+    0% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    35% {
+      transform: translate(-14px, 8px) rotate(-1.2deg) scale(1.02);
+    }
+    70% {
+      transform: translate(10px, -6px) rotate(0.8deg) scale(0.99);
+    }
+    100% {
+      transform: translate(-6px, 12px) rotate(-0.4deg) scale(1.03);
+    }
+  }
 
   @keyframes rise {
     from {
@@ -121,6 +187,13 @@
       radial-gradient(70rem 40rem at 50% 120%, oklch(0.35 0.08 290 / 30%), transparent 70%);
     background-attachment: fixed;
   }
+  .xdd body {
+    background-image:
+      radial-gradient(ellipse at center, transparent 50%, oklch(0.1 0.03 255 / 75%) 100%),
+      radial-gradient(56rem 34rem at 6% -10%, oklch(0.55 0.11 55 / 30%), transparent 70%),
+      radial-gradient(52rem 36rem at 45% 30%, oklch(0.45 0.09 165 / 14%), transparent 70%),
+      radial-gradient(64rem 40rem at 100% 110%, oklch(0.35 0.08 260 / 38%), transparent 70%);
+  }
   /* Film grain, behind content. */
   body::before {
     content: "";
@@ -130,6 +203,11 @@
     pointer-events: none;
     opacity: 0.07;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.9 0 0 0 0 0.85 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  /* Webcam sensor noise. */
+  .xdd body::before {
+    opacity: 0.17;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.85 0 0 0 0 1 0 0 0 0 0.9 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   h1,
   h2,
@@ -141,16 +219,47 @@
     font-variation-settings: "SOFT" 60;
     letter-spacing: -0.01em;
   }
+  .xdd
+    :is(
+      h1,
+      h2,
+      h3,
+      [data-slot="card-title"],
+      [data-slot="dialog-title"],
+      [data-slot="sheet-title"]
+    ) {
+    font-variation-settings:
+      "SOFT" 100,
+      "WONK" 1;
+  }
+  /* Colour fringing from a cheap webcam lens. */
+  .xdd h1 {
+    text-shadow:
+      -2.5px 0 oklch(0.6 0.12 45 / 65%),
+      2.5px 0 oklch(0.72 0.1 150 / 55%);
+  }
+  .xdd :is(h2, [data-slot="card-title"]) {
+    text-shadow:
+      -1px 0 oklch(0.6 0.12 45 / 45%),
+      1px 0 oklch(0.72 0.1 150 / 35%);
+  }
   ::selection {
     background: oklch(0.8 0.075 45 / 35%);
     color: var(--foreground);
+  }
+  .xdd ::selection {
+    background: oklch(0.86 0.04 165 / 35%);
   }
   * {
     scrollbar-color: oklch(0.45 0.05 320 / 70%) transparent;
     scrollbar-width: thin;
   }
+  .xdd * {
+    scrollbar-color: oklch(0.5 0.04 170 / 70%) transparent;
+  }
   @media (prefers-reduced-motion: reduce) {
-    .animate-rise {
+    .animate-rise,
+    .animate-handheld {
       animation: none;
     }
   }
@@ -159,11 +268,11 @@
 @utility text-shimmer {
   background-image: linear-gradient(
     100deg,
-    var(--rose-gold-deep) 0%,
-    var(--rose-gold) 35%,
-    var(--champagne) 50%,
-    var(--rose-gold) 65%,
-    var(--rose-gold-deep) 100%
+    var(--highlight-deep) 0%,
+    var(--highlight) 35%,
+    var(--highlight-pale) 50%,
+    var(--highlight) 65%,
+    var(--highlight-deep) 100%
   );
   background-size: 200% auto;
   background-clip: text;

@@ -3,6 +3,7 @@ import { type RouteConfig, index, layout, route } from "@react-router/dev/routes
 export default [
   route("mcp", "routes/mcp.ts"),
   route("events", "routes/events.ts"),
+  route("theme", "routes/theme.ts"),
   route("api/jobs/:jobId", "routes/api.jobs.$jobId.ts"),
   route("media/:mediaId", "routes/media.$mediaId.ts"),
   route("exports/:exportId", "routes/exports.$exportId.ts"),

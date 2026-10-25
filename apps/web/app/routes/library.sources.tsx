@@ -89,7 +89,7 @@ function DropZone({ uploading }: { uploading: boolean }) {
           upload();
         }}
         className={`flex min-h-56 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-          over ? "border-rose-gold bg-accent/30" : "border-muted-foreground/30 hover:bg-muted/40"
+          over ? "border-highlight bg-accent/30" : "border-muted-foreground/30 hover:bg-muted/40"
         }`}
       >
         <span className="text-base font-medium">
