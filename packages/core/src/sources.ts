@@ -67,11 +67,11 @@ export async function assertReadablePath(db: TDb, path: string) {
   return full;
 }
 
-/** Stores the original file, records the source and extracts it in the background. */
+/** Stores the original file and records the source. Extraction runs in the background unless `wait`. */
 export async function registerSource(
   db: TDatabase,
   paths: AppPaths,
-  input: { libraryId: string; fileName: string; bytes: Uint8Array; title?: string },
+  input: { libraryId: string; fileName: string; bytes: Uint8Array; title?: string; wait?: boolean },
   ctx: ChangeContext,
 ): Promise<TSourceS> {
   const fileName = basename(input.fileName);
@@ -102,6 +102,10 @@ export async function registerSource(
       limitations: [],
     }),
   );
+  if (input.wait) {
+    await extractStoredSource(db, paths, result.id);
+    return await resolveSource(db, input.libraryId, result.id);
+  }
   void extractStoredSource(db, paths, result.id).catch((error: unknown) => {
     emitNotice({
       level: "error",
@@ -124,7 +128,7 @@ export async function registerSourceFromPath(
   return registerSource(
     db,
     paths,
-    { libraryId: input.libraryId, fileName: basename(full), bytes, title: input.title },
+    { libraryId: input.libraryId, fileName: basename(full), bytes, title: input.title, wait: true },
     ctx,
   );
 }

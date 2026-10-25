@@ -58,6 +58,7 @@ export const tReviewMessage = sqliteTable(
 export interface ApprovalScope {
   conceptIds: string[];
   subtopicId?: string;
+  knowledgeItemIds?: string[];
 }
 
 export const tApproval = sqliteTable(

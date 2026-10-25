@@ -12,6 +12,7 @@
   "dependencies": {
     "@anki-cards/core": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
+    "drizzle-orm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

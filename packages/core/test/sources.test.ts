@@ -6,13 +6,7 @@ import { generateLecturePdf } from "../../../tests/fixtures/lecture-pdf.ts";
 import { tMediaAsset } from "../src/db/schema/index.ts";
 import { createLibrary } from "../src/libraries.ts";
 import { resolvePaths } from "../src/paths.ts";
-import {
-  assertReadablePath,
-  extractStoredSource,
-  listSources,
-  registerSource,
-  sourceUnits,
-} from "../src/sources.ts";
+import { assertReadablePath, listSources, registerSource, sourceUnits } from "../src/sources.ts";
 import { setSetting } from "../src/settings.ts";
 import { createTestDb, type TestDb } from "./helpers.ts";
 
@@ -34,11 +28,10 @@ describe("sources", () => {
     const source = await registerSource(
       t.db,
       paths,
-      { libraryId: lib.id, fileName: "lecture.pdf", bytes },
+      { libraryId: lib.id, fileName: "lecture.pdf", bytes, wait: true },
       user,
     );
     expect(source.displayId).toBe("SRC-001");
-    await extractStoredSource(t.db, paths, source.id);
 
     const [stored] = await listSources(t.db, lib.id);
     expect(stored?.extractionStatus).toBe("extracted");

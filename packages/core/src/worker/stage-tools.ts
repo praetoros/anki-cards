@@ -13,6 +13,7 @@ export const TOOL_GROUPS = {
     "raise_review_item",
     "save_session_summary",
     "get_settings",
+    "list_objectives",
     "complete_job",
   ],
   sources: ["list_sources", "get_source_outline", "read_source_unit", "get_media"],

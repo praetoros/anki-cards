@@ -23,3 +23,8 @@ export * from "./worker/runner.ts";
 export * from "./worker/stage-tools.ts";
 export * from "./workflow.ts";
 export * from "./sources.ts";
+export * from "./knowledge.ts";
+export * from "./resolve.ts";
+export * from "./review.ts";
+export * from "./gates.ts";
+export * from "./workflow-actions.ts";
