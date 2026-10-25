@@ -95,7 +95,7 @@ export function parseCodexLine(line: string): WorkerEvent[] {
       const id = str(item["id"]);
       switch (str(item["type"])) {
         case "agent_message":
-          return done ? [{ type: "message", text: str(item["text"]) }] : [];
+          return done && str(item["text"]) ? [{ type: "message", text: str(item["text"]) }] : [];
         case "reasoning":
           return done ? [{ type: "reasoning", text: str(item["text"]) }] : [];
         case "mcp_tool_call": {

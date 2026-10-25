@@ -1,4 +1,5 @@
 import { unzipSync } from "fflate";
+import * as mupdf from "mupdf";
 import { posix } from "node:path";
 import { readImageInfo } from "./image-header.ts";
 import { children, parseXml, type XmlElement } from "./xml.ts";
@@ -79,4 +80,42 @@ export function mediaInfo(path: string, data: Uint8Array) {
     height: info?.height ?? 0,
     hasSize: info !== undefined,
   };
+}
+
+/** Formats browsers and models can't show; mupdf can decode them. */
+const CONVERT_TO_PNG = new Set(["image/tiff", "image/bmp"]);
+
+/**
+ * Media bytes ready to store: TIFF and BMP become lossless PNG so they can be viewed in the app,
+ * by the AI and in Anki. Returns the original unchanged when it is already web-safe or can't
+ * be decoded.
+ */
+export function webSafeMedia(path: string, data: Uint8Array) {
+  const info = mediaInfo(path, data);
+  if (!CONVERT_TO_PNG.has(info.mime)) return { ...info, data, convertedFrom: null };
+  let image: mupdf.Image | undefined;
+  let pixmap: mupdf.Pixmap | undefined;
+  try {
+    image = new mupdf.Image(data);
+    pixmap = image.toPixmap();
+    const colorspace = pixmap.getColorSpace();
+    if (colorspace && !colorspace.isGray() && !colorspace.isRGB()) {
+      const converted = pixmap.convertToColorSpace(mupdf.ColorSpace.DeviceRGB, true);
+      pixmap.destroy();
+      pixmap = converted;
+    }
+    return {
+      mime: "image/png",
+      width: pixmap.getWidth(),
+      height: pixmap.getHeight(),
+      hasSize: true,
+      data: pixmap.asPNG().slice(),
+      convertedFrom: info.mime,
+    };
+  } catch {
+    return { ...info, data, convertedFrom: null };
+  } finally {
+    pixmap?.destroy();
+    image?.destroy();
+  }
 }

@@ -1,5 +1,5 @@
 import { figureUnit, ImageSet, isTiny } from "./images.ts";
-import { mediaInfo, OoxmlPackage } from "./ooxml.ts";
+import { OoxmlPackage, webSafeMedia } from "./ooxml.ts";
 import { extractPdf } from "./pdf.ts";
 import { convertToPdf } from "./tools.ts";
 import type { ExtractedUnit, ExtractionResult, ExtractOptions } from "./types.ts";
@@ -134,7 +134,7 @@ function extractDocxXml(bytes: Uint8Array, limitation: string): ExtractionResult
     if (known) return known;
     const data = pkg.get(mediaPath);
     if (!data) return undefined;
-    const info = mediaInfo(mediaPath, data);
+    const info = webSafeMedia(mediaPath, data);
     if (info.hasSize && isTiny(info.width, info.height)) {
       imageSet.skippedTiny++;
       return undefined;
@@ -145,9 +145,12 @@ function extractDocxXml(bytes: Uint8Array, limitation: string): ExtractionResult
       mime: info.mime,
       width: info.width,
       height: info.height,
-      data,
+      data: info.data,
       location: {},
-      provenance: { path: mediaPath },
+      provenance: {
+        path: mediaPath,
+        ...(info.convertedFrom ? { convertedFrom: info.convertedFrom } : {}),
+      },
     });
     keyByPath.set(mediaPath, image.key);
     if (isNew && info.hasSize) figures.push(figureUnit(image, {}, []));

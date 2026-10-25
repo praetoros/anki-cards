@@ -1,5 +1,5 @@
 import { figureUnit, ImageSet, isTiny } from "./images.ts";
-import { mediaInfo, OoxmlPackage } from "./ooxml.ts";
+import { OoxmlPackage, webSafeMedia } from "./ooxml.ts";
 import { DEFAULT_RENDER_DPI, renderPdfPages } from "./pdf.ts";
 import { convertToPdf } from "./tools.ts";
 import type { BBox, ExtractedUnit, ExtractionResult, ExtractOptions, TextBlock } from "./types.ts";
@@ -324,7 +324,7 @@ export async function extractPptx(
         limitations.push(`slide ${slide.number}: picture ${picture.rId} has no media part`);
         continue;
       }
-      const info = mediaInfo(rel.target, data);
+      const info = webSafeMedia(rel.target, data);
       if (info.hasSize && isTiny(info.width, info.height)) {
         imageSet.skippedTiny++;
         continue;
@@ -335,10 +335,14 @@ export async function extractPptx(
         mime: info.mime,
         width: info.width,
         height: info.height,
-        data,
+        data: info.data,
         location,
         ...(picture.rect ? { bbox: toBBox(picture.rect) } : {}),
-        provenance: { path: rel.target, rId: picture.rId },
+        provenance: {
+          path: rel.target,
+          rId: picture.rId,
+          ...(info.convertedFrom ? { convertedFrom: info.convertedFrom } : {}),
+        },
       });
       if (!imageKeys.includes(image.key)) imageKeys.push(image.key);
       if (isNew) {

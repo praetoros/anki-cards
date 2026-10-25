@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, extname, join } from "node:path";
 
@@ -126,8 +126,28 @@ export async function findProvider(db: TDb, provider: ProviderId): Promise<strin
   const exe = onPath(win ? ["codex.exe"] : ["codex"]);
   if (exe) return exe;
   const shim = win ? onPath(["codex.cmd"]) : null;
-  if (shim) return codexVendorBinary(shim);
-  return null;
+  if (shim) {
+    const vendor = codexVendorBinary(shim);
+    if (vendor) return vendor;
+  }
+  return win ? codexDesktopBinary() : null;
+}
+
+/** The Codex desktop app keeps its CLI in a folder per version; the newest one wins. */
+function codexDesktopBinary(): string | null {
+  const root = join(
+    process.env["LOCALAPPDATA"] ?? join(homedir(), "AppData", "Local"),
+    "OpenAI",
+    "Codex",
+    "bin",
+  );
+  if (!existsSync(root)) return null;
+  const found = readdirSync(root)
+    .map((dir) => join(root, dir, "codex.exe"))
+    .filter((exe) => existsSync(exe))
+    .map((exe) => ({ exe, time: statSync(exe).mtimeMs }))
+    .sort((a, b) => b.time - a.time);
+  return found[0]?.exe ?? null;
 }
 
 export interface ProviderStatus extends TProviderCheckS {
