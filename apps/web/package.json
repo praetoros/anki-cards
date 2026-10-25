@@ -18,6 +18,7 @@
     "@react-router/node": "catalog:",
     "cn": "catalog:",
     "isbot": "catalog:",
+    "lucide-react": "catalog:",
     "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
