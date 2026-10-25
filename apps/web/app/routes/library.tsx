@@ -94,17 +94,21 @@ export default function Library({ loaderData }: Route.ComponentProps) {
   const { library } = loaderData;
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2">
-        <h1 className="font-semibold">{library.name}</h1>
-        <nav className="flex flex-wrap gap-1">
+      <div className="flex flex-col gap-3 border-b border-rose-gold/10 bg-linear-to-b from-accent/25 to-transparent px-5 pt-5">
+        <h1 className="text-3xl font-light">
+          <em className="text-shimmer font-normal">{library.name}</em>
+        </h1>
+        <nav className="-mb-px flex flex-wrap gap-x-1">
           {LIBRARY_TABS.map((tab) => (
             <NavLink
               key={tab.label}
               to={tab.to}
               end={tab.end}
               className={({ isActive }) =>
-                `rounded-md px-2 py-1 text-sm ${
-                  isActive ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"
+                `border-b-2 px-3 pt-1 pb-2.5 text-sm transition-colors ${
+                  isActive
+                    ? "border-rose-gold font-medium text-rose-gold"
+                    : "border-transparent text-muted-foreground hover:border-rose-gold/30 hover:text-foreground"
                 }`
               }
             >

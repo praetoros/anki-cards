@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@fontsource-variable/figtree": "catalog:",
+    "@fontsource-variable/fraunces": "catalog:",
     "@shadcn/react": "catalog:",
     "class-variance-authority": "catalog:",
     "cn": "catalog:",
