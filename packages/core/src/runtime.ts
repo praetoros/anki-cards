@@ -3,11 +3,14 @@ import { existsSync, readdirSync } from "node:fs";
 import { recordBackup, writeBackup } from "./backup.ts";
 import { createDb, migrationsFolder, runMigrations, type TDatabase } from "./db/client.ts";
 import { resolvePaths, type AppPaths } from "./paths.ts";
+import { checkAllProviders } from "./worker/providers.ts";
+import { startRunner } from "./worker/runner.ts";
 
 export interface Runtime {
   db: TDatabase;
   paths: AppPaths;
   port: number;
+  mcpUrl: string;
 }
 
 function pendingMigrations(db: TDatabase): number {
@@ -40,23 +43,22 @@ export async function openAppDatabase(paths: AppPaths): Promise<TDatabase> {
 const key = Symbol.for("anki-cards.runtime");
 const store = globalThis as unknown as Record<symbol, Promise<Runtime> | undefined>;
 
-type RuntimeHook = (runtime: Runtime) => Promise<void> | void;
-const hooksKey = Symbol.for("anki-cards.runtime-hooks");
-const hookStore = globalThis as unknown as Record<symbol, RuntimeHook[] | undefined>;
-const hooks = (hookStore[hooksKey] ??= []);
-
-/** Registers work to run once when the runtime starts (job runner, provider checks). */
-export function onRuntimeStart(hook: RuntimeHook) {
-  hooks.push(hook);
-}
-
 /** The process-wide runtime, created on first use and shared across dev-server reloads. */
 export function getRuntime(): Promise<Runtime> {
   store[key] ??= (async () => {
     const paths = resolvePaths();
     const db = await openAppDatabase(paths);
-    const runtime: Runtime = { db, paths, port: Number(process.env.ANKI_CARDS_PORT ?? 4317) };
-    for (const hook of hooks) await hook(runtime);
+    const port = Number(process.env.ANKI_CARDS_PORT ?? 4317);
+    const runtime: Runtime = {
+      db,
+      paths,
+      port,
+      mcpUrl: process.env.ANKI_CARDS_MCP_URL ?? `http://127.0.0.1:${port}/mcp`,
+    };
+    if (!process.env.ANKI_CARDS_NO_RUNNER) {
+      startRunner(runtime);
+      void checkAllProviders(db, true).catch(() => undefined);
+    }
     return runtime;
   })();
   return store[key];

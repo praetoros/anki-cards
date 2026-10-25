@@ -10,7 +10,9 @@
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "catalog:"
+    "@anki-cards/core": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "catalog:",
