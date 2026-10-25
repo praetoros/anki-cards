@@ -29,6 +29,7 @@ import {
   recordProviderTest,
   workerEnv,
 } from "./providers.ts";
+import { finishCompaction, recordJobFailure } from "../session-actions.ts";
 import { cleanupRunFolders, prepareRunFolder } from "./run-folder.ts";
 import { jobUsesWeb, toolsForJob } from "./stage-tools.ts";
 
@@ -326,6 +327,7 @@ export class JobRunner {
           Boolean(state.completedByTool !== null || state.finished?.ok),
           "Test run finished",
         );
+      if (job.kind === "compact") await finishCompaction(db, job);
       return;
     }
 
@@ -341,11 +343,12 @@ export class JobRunner {
         exitCode: code,
       });
       await addJobEvent(db, job, "ended", { status: "failed", error: reason });
+      await recordJobFailure(db, job, true, reason);
       bus.emit("job", {
         jobId: job.id,
         sessionId: job.sessionId,
         libraryId: job.libraryId,
-        type: "repeated_tool_error",
+        type: "job_failed",
         data: { error: reason },
       });
       return;
@@ -401,6 +404,7 @@ export class JobRunner {
     });
     await addJobEvent(db, job, "ended", { status: "failed", error: reason });
     if (job.kind === "ping") await recordProviderTest(db, job.provider, false, reason);
+    else await recordJobFailure(db, job, false, reason);
     bus.emit("job", {
       jobId: job.id,
       sessionId: job.sessionId,

@@ -56,8 +56,12 @@ export function getRuntime(): Promise<Runtime> {
       mcpUrl: process.env.ANKI_CARDS_MCP_URL ?? `http://127.0.0.1:${port}/mcp`,
     };
     if (!process.env.ANKI_CARDS_NO_RUNNER) {
-      startRunner(runtime);
-      void checkAllProviders(db, true).catch(() => undefined);
+      const runner = startRunner(runtime);
+      void checkAllProviders(db, true)
+        .then(async (results) => {
+          for (const r of results) if (r.ok) await runner.resumePaused(r.provider);
+        })
+        .catch(() => undefined);
     }
     return runtime;
   })();

@@ -30,3 +30,4 @@ export * from "./gates.ts";
 export * from "./workflow-actions.ts";
 export * from "./history-view.ts";
 export * from "./library-export.ts";
+export * from "./session-actions.ts";

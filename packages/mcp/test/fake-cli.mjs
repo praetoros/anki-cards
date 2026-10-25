@@ -1,6 +1,6 @@
 // Stand-in for `codex` and `claude` in tests. Speaks each CLI's JSON stream format and performs the
 // tool calls listed in the scenario file named by FAKE_CLI_SCENARIO against the app's MCP endpoint.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
@@ -85,6 +85,20 @@ for (const step of scenario.steps) {
     continue;
   }
   if (step.crash) process.exit(step.crash);
+  if (step.crashOnce) {
+    if (!existsSync(step.crashOnce)) {
+      writeFileSync(step.crashOnce, "crashed");
+      process.exit(5);
+    }
+    continue;
+  }
+  if (step.rateLimit) {
+    emit({
+      type: "rate_limit_event",
+      rate_limit_info: { status: "rejected", resetsAt: step.rateLimit },
+    });
+    process.exit(1);
+  }
   const result = await client.callTool({ name: step.tool, arguments: step.args ?? {} });
   const text = (result.content ?? []).map((c) => c.text ?? "").join("\n");
   if (isCodex) {

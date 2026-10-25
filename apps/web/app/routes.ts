@@ -5,6 +5,7 @@ export default [
   route("events", "routes/events.ts"),
   route("api/jobs/:jobId", "routes/api.jobs.$jobId.ts"),
   route("media/:mediaId", "routes/media.$mediaId.ts"),
+  route("api/sessions/:sessionId", "routes/api.sessions.$sessionId.ts"),
   layout("routes/layout.tsx", [
     index("routes/home.tsx"),
     route("settings", "routes/settings.tsx"),

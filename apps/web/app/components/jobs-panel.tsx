@@ -104,10 +104,12 @@ export function JobsPanel({
   sessions,
   jobs,
   renderActions,
+  footer,
 }: {
   sessions: TSessionS[];
   jobs: TJobS[];
   renderActions?: (session: TSessionS) => React.ReactNode;
+  footer?: React.ReactNode;
 }) {
   const [openJob, setOpenJob] = useState<string | null>(null);
   return (
@@ -127,6 +129,7 @@ export function JobsPanel({
           actions={renderActions?.(s)}
         />
       ))}
+      {footer}
       <JobSheet jobId={openJob} onClose={() => setOpenJob(null)} />
     </aside>
   );
