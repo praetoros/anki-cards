@@ -15,6 +15,7 @@ export default [
       route("knowledge", "routes/library.knowledge.tsx"),
       route("objectives", "routes/library.objectives.tsx"),
       route("review", "routes/library.review.tsx"),
+      route("history", "routes/library.history.tsx"),
       route("settings", "routes/library.settings.tsx"),
     ]),
   ]),

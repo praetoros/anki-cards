@@ -1,4 +1,6 @@
-import { providerStatuses, type ProviderId } from "@anki-cards/core";
+import { backupNow, listBackups, providerStatuses, type ProviderId } from "@anki-cards/core";
+
+import { BackupPanel } from "~/components/backup-panel";
 
 import { ProviderPanel } from "~/components/provider-panel";
 import { SettingsForm } from "~/components/settings-form";
@@ -16,6 +18,7 @@ export async function loader() {
   return {
     settings: await settingViews(db, null),
     providers: await providerStatuses(db),
+    backups: await listBackups(db),
     dataDir: paths.data,
   };
 }
@@ -23,8 +26,12 @@ export async function loader() {
 export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   return handle(async () => {
-    const { db } = await rt();
+    const { db, paths } = await rt();
     const intent = formString(form, "intent");
+    if (intent === "backup") {
+      const backup = await backupNow(db, paths, "manual");
+      return { ok: true, message: `Backed up to ${backup?.path ?? ""}` };
+    }
     if (intent === "check-providers") {
       await checkAllProviders(db);
       return { ok: true, message: "Checked" };
@@ -48,6 +55,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </p>
       </div>
       <ProviderPanel providers={loaderData.providers} />
+      <BackupPanel backups={loaderData.backups} />
       <SettingsForm settings={loaderData.settings} scope="global" />
     </main>
   );

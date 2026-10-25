@@ -390,6 +390,9 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 1.0.0-rc.5(@types/sql.js@1.4.11)(sql.js@1.15.1)(valibot@1.5.0(typescript@7.0.2))(zod@4.6.7)
+      fflate:
+        specifier: 'catalog:'
+        version: 0.8.3
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
